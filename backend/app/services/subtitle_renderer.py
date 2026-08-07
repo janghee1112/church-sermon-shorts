@@ -150,31 +150,51 @@ def render_subtitle_timeline(
     font_size: int,
     position_y: float,
     duration_sec: float,
+    title_path: Path,
+    banner_path: Path,
+    banner_width: int,
+    banner_height: int,
+    banner_x: int,
+    banner_y: int,
 ) -> tuple[Path, list[Path]]:
     from PIL import Image
 
     rendered = render_subtitle_images(
         output_directory, cues, canvas_width, canvas_height, font_path, font_size, position_y,
     )
-    blank_path = output_directory / "subtitle_blank.png"
-    Image.new("RGBA", (canvas_width, canvas_height), (0, 0, 0, 0)).save(blank_path, format="PNG")
-    manifest_path = output_directory / "subtitles.ffconcat"
+    decoration_path = output_directory / "decoration.png"
+    with Image.open(title_path).convert("RGBA") as decoration, Image.open(banner_path).convert("RGBA") as banner:
+        resized_banner = banner.resize((banner_width, banner_height), Image.Resampling.LANCZOS)
+        decoration.alpha_composite(resized_banner, dest=(banner_x, banner_y))
+        decoration.save(decoration_path, format="PNG")
+
+    composited: list[tuple[Path, float, float]] = []
+    with Image.open(decoration_path).convert("RGBA") as decoration:
+        for index, (subtitle_path, cue_start, cue_end) in enumerate(rendered, start=1):
+            with Image.open(subtitle_path).convert("RGBA") as subtitle:
+                overlay = Image.alpha_composite(decoration, subtitle)
+            overlay_path = output_directory / f"overlay_{index:03d}.png"
+            overlay.save(overlay_path, format="PNG")
+            subtitle_path.unlink(missing_ok=True)
+            composited.append((overlay_path, cue_start, cue_end))
+
+    manifest_path = output_directory / "overlays.ffconcat"
     lines = ["ffconcat version 1.0"]
     cursor = 0.0
-    assets = [blank_path]
+    assets = [decoration_path]
 
-    for image_path, cue_start, cue_end in sorted(rendered, key=lambda item: item[1]):
+    for image_path, cue_start, cue_end in sorted(composited, key=lambda item: item[1]):
         start = max(cursor, min(duration_sec, cue_start))
         end = max(start, min(duration_sec, cue_end))
         if start > cursor + 0.001:
-            lines.extend([f"file '{blank_path.name}'", f"duration {start - cursor:.6f}"])
+            lines.extend([f"file '{decoration_path.name}'", f"duration {start - cursor:.6f}"])
         if end > start + 0.001:
             lines.extend([f"file '{image_path.name}'", f"duration {end - start:.6f}"])
             cursor = end
         assets.append(image_path)
 
     if duration_sec > cursor + 0.001:
-        lines.extend([f"file '{blank_path.name}'", f"duration {duration_sec - cursor:.6f}"])
-    lines.append(f"file '{blank_path.name}'")
+        lines.extend([f"file '{decoration_path.name}'", f"duration {duration_sec - cursor:.6f}"])
+    lines.append(f"file '{decoration_path.name}'")
     manifest_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return manifest_path, assets

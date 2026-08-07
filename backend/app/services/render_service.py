@@ -365,11 +365,6 @@ def process_render_job(db: Session, render_id: int) -> None:
         if not relative_cues:
             raise RenderError("렌더링할 유효한 자막이 없습니다.", "subtitles_missing")
         subtitle_size = round(52 * min(1.5, max(0.7, float(snapshot["subtitle_font_scale"]))))
-        subtitle_manifest_path, subtitle_assets = render_subtitle_timeline(
-            work_dir, relative_cues, width, height, subtitle_font, subtitle_size,
-            float(snapshot["subtitle_position_y"]), output_duration,
-        )
-
         step = "composing_video"
         _set_state(db, job, "preparing", 20, step)
         video_top = round(float(snapshot["video_area_position_y"]) * height)
@@ -394,12 +389,15 @@ def process_render_job(db: Session, render_id: int) -> None:
             raise RenderError(str(exc), "banner_layout_invalid") from exc
         if banner_layout.y < video_top + video_height:
             raise RenderError("교회 배너가 영상 영역과 겹칩니다.", "banner_layout_invalid")
+        overlay_manifest_path, overlay_assets = render_subtitle_timeline(
+            work_dir, relative_cues, width, height, subtitle_font, subtitle_size,
+            float(snapshot["subtitle_position_y"]), output_duration,
+            title_path, banner_path, banner_layout.width, banner_layout.height,
+            banner_layout.x, banner_layout.y,
+        )
         command = build_ffmpeg_command(
-            ffmpeg_binary="ffmpeg", source_path=source_path, title_path=title_path,
-            subtitle_manifest_path=subtitle_manifest_path,
-            banner_path=banner_path,
-            banner_width=banner_layout.width, banner_height=banner_layout.height,
-            banner_x=banner_layout.x, banner_y=banner_layout.y,
+            ffmpeg_binary="ffmpeg", source_path=source_path,
+            overlay_manifest_path=overlay_manifest_path,
             temporary_output=temporary_output,
             start_sec=float(snapshot["start_sec"]), duration_sec=float(snapshot["duration_sec"]), playback_rate=playback_rate,
             canvas_width=width, canvas_height=height, fps=int(output["fps"]), crf=int(output["crf"]),
@@ -431,9 +429,9 @@ def process_render_job(db: Session, render_id: int) -> None:
         metadata = validate_rendered_file(temporary_output, output_duration, width, height)
         os.replace(temporary_output, final_output)
         title_path.unlink(missing_ok=True)
-        subtitle_manifest_path.unlink(missing_ok=True)
-        for subtitle_asset in subtitle_assets:
-            subtitle_asset.unlink(missing_ok=True)
+        overlay_manifest_path.unlink(missing_ok=True)
+        for overlay_asset in overlay_assets:
+            overlay_asset.unlink(missing_ok=True)
         log_path.unlink(missing_ok=True)
         job.status = "completed"
         job.progress = 100

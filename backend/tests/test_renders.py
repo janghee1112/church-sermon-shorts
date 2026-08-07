@@ -114,13 +114,7 @@ def test_ffmpeg_command_does_not_apply_video_darkness(tmp_path):
     command = build_ffmpeg_command(
         ffmpeg_binary="ffmpeg",
         source_path=tmp_path / "source.mp4",
-        title_path=tmp_path / "title.png",
-        subtitle_manifest_path=tmp_path / "subtitles.ffconcat",
-        banner_path=tmp_path / "banner.png",
-        banner_width=626,
-        banner_height=122,
-        banner_x=227,
-        banner_y=1651,
+        overlay_manifest_path=tmp_path / "overlays.ffconcat",
         temporary_output=tmp_path / "output.mp4",
         start_sec=10,
         duration_sec=45,
@@ -141,10 +135,9 @@ def test_ffmpeg_command_does_not_apply_video_darkness(tmp_path):
 def test_ffmpeg_command_applies_matching_video_and_audio_speed(tmp_path):
     crop = calculate_render_crop(1920, 1080, 1080, 922, 1.12, 0.5, 0.5)
     command = build_ffmpeg_command(
-        ffmpeg_binary="ffmpeg", source_path=tmp_path / "source.mp4", title_path=tmp_path / "title.png",
-        subtitle_manifest_path=tmp_path / "subtitles.ffconcat",
-        banner_path=tmp_path / "banner.png", banner_width=497, banner_height=100,
-        banner_x=292, banner_y=1594, temporary_output=tmp_path / "output.mp4", start_sec=10,
+        ffmpeg_binary="ffmpeg", source_path=tmp_path / "source.mp4",
+        overlay_manifest_path=tmp_path / "overlays.ffconcat",
+        temporary_output=tmp_path / "output.mp4", start_sec=10,
         duration_sec=60, playback_rate=1.2, canvas_width=1080, canvas_height=1920, fps=30,
         crf=20, preset="medium", video_top=576, video_height=922, crop=crop,
     )
@@ -156,24 +149,28 @@ def test_ffmpeg_command_applies_matching_video_and_audio_speed(tmp_path):
     assert command[output_limit_index + 1] == "50.000"
 
 
-def test_ffmpeg_command_uses_one_concat_subtitle_timeline(tmp_path):
+def test_ffmpeg_command_uses_one_composited_overlay_timeline(tmp_path):
     crop = calculate_render_crop(1920, 1080, 1080, 922, 1.12, 0.5, 0.5)
     command = build_ffmpeg_command(
-        ffmpeg_binary="ffmpeg", source_path=tmp_path / "source.mp4", title_path=tmp_path / "title.png",
-        subtitle_manifest_path=tmp_path / "subtitles.ffconcat",
-        banner_path=tmp_path / "banner.png", banner_width=497, banner_height=100,
-        banner_x=292, banner_y=1594, temporary_output=tmp_path / "output.mp4", start_sec=10,
+        ffmpeg_binary="ffmpeg", source_path=tmp_path / "source.mp4",
+        overlay_manifest_path=tmp_path / "overlays.ffconcat",
+        temporary_output=tmp_path / "output.mp4", start_sec=10,
         duration_sec=45, canvas_width=1080, canvas_height=1920, fps=30, crf=20,
         preset="medium", video_top=576, video_height=922, crop=crop,
     )
     graph = command[command.index("-filter_complex") + 1]
-    assert "[2:v]format=rgba" in graph
-    assert command.count("-i") == 4
+    assert "[1:v]format=rgba" in graph
+    assert command.count("-i") == 2
     assert command[command.index("-f") + 1] == "concat"
+    assert command[command.index("-threads") + 1] == "1"
 
 
 def test_concat_subtitle_timeline_contains_cues_and_gaps(tmp_path):
     settings = get_settings()
+    title = tmp_path / "title.png"
+    banner = get_template_banner("sermon_letterbox_v1").path
+    from PIL import Image
+    Image.new("RGBA", (1080, 1920), (0, 0, 0, 0)).save(title)
     output, assets = render_subtitle_timeline(
         tmp_path,
         [{"start_sec": 0.5, "end_sec": 2.25, "text": "실제 전사 자막"}],
@@ -183,12 +180,18 @@ def test_concat_subtitle_timeline_contains_cues_and_gaps(tmp_path):
         52,
         0.21,
         3.0,
+        title,
+        banner,
+        497,
+        100,
+        292,
+        1594,
     )
     contents = output.read_text(encoding="utf-8")
     assert "duration 0.500000" in contents
     assert "duration 1.750000" in contents
     assert "duration 0.750000" in contents
-    assert "subtitle_001.png" in contents
+    assert "overlay_001.png" in contents
     assert all(path.is_file() for path in assets)
 
 
