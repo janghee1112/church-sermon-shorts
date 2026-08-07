@@ -413,6 +413,16 @@ def process_render_job(db: Session, render_id: int) -> None:
                 _update_encoding_progress(db, job, progress_line.strip(), output_duration)
             return_code = process.wait()
         if return_code != 0:
+            try:
+                ffmpeg_error = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
+            except OSError:
+                ffmpeg_error = "FFmpeg 로그를 읽을 수 없습니다."
+            logger.error(
+                "render_id=%s ffmpeg exited with code=%s: %s",
+                render_id,
+                return_code,
+                ffmpeg_error,
+            )
             raise RenderError("쇼츠 영상 생성에 실패했습니다.", "ffmpeg_failed")
 
         step = "finalizing"
