@@ -1,0 +1,44 @@
+export const SERMON_LETTERBOX_TEMPLATE = {
+  type: "sermon_letterbox_v1",
+  titleFontKey: "pretendard_black_v1",
+  titleFontFamily: "var(--sermon-title-font)",
+  subtitleFontKey: "korean_myeongjo_v1",
+  subtitleFontFamily: "var(--sermon-subtitle-font)",
+  titleHighlightColorVar: "--sermon-highlight",
+  previewWidth: 360,
+  previewHeight: 640,
+  defaultTitlePositionY: 0.08,
+  defaultSubtitlePositionY: 0.21,
+  defaultVideoAreaPositionY: 0.30,
+  defaultVideoAreaHeight: 0.48,
+  bottomSafetyRatio: 0.1,
+  banner: {
+    enabled: true,
+    assetKey: "onnuri_vision_church",
+    assetPath: "/assets/church/onnuri-vision-banner.png",
+    sourceWidth: 1799,
+    sourceHeight: 361,
+    widthRatio: 0.46,
+    positionX: 0.5,
+    positionY: 0.83,
+  },
+} as const;
+
+export type SermonTemplateType = typeof SERMON_LETTERBOX_TEMPLATE.type;
+
+export function calculateLetterboxVideoArea(
+  canvasWidth: number,
+  canvasHeight: number,
+  positionY: number,
+  heightRatio: number,
+) {
+  const safePositionY = Math.min(0.45, Math.max(0.28, positionY));
+  const safeHeight = Math.min(0.58, Math.max(0.38, heightRatio));
+  const height = Math.min(canvasHeight - safePositionY * canvasHeight, safeHeight * canvasHeight);
+  return {
+    x: 0,
+    y: safePositionY * canvasHeight,
+    width: canvasWidth,
+    height,
+  };
+}

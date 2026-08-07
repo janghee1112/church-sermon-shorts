@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --sermon-highlight: #ffd84d;
+  --sermon-title-font: var(--font-pretendard-black), "Pretendard Black", sans-serif;
+  --sermon-subtitle-font: "Noto Serif KR", "Nanum Myeongjo", "Batang", Georgia, serif;
+}
+* { box-sizing: border-box; }
+html { background: #f7f4ec; }
+body {
+  margin: 0;
+  color: #17201c;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(214, 169, 75, .15), transparent 25rem),
+    radial-gradient(circle at 95% 18%, rgba(49, 95, 75, .10), transparent 30rem),
+    #f7f4ec;
+  font-family: Arial, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+button, input, textarea { font: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+::selection { background: #dcebe1; }
+
+.serif { font-family: Georgia, "Nanum Myeongjo", serif; }
+.focus-ring:focus-visible { outline: 3px solid rgba(214,169,75,.55); outline-offset: 3px; }
+.scrollbar-thin { scrollbar-width: thin; scrollbar-color: #afbbb2 transparent; }
+.template-title {
+  font-family: var(--sermon-title-font);
+  font-weight: 900;
+  letter-spacing: -.03em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .65);
+  overflow-wrap: anywhere;
+}
+.template-title-editor {
+  font-family: var(--sermon-title-font);
+  font-weight: 900;
+  letter-spacing: -.03em;
+}
+.template-subtitle {
+  font-family: var(--sermon-subtitle-font);
+  letter-spacing: .01em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .7);
+  overflow-wrap: anywhere;
+}
