@@ -133,7 +133,7 @@ npm run dev
 
 편집을 마친 뒤 **쇼츠 생성**을 누르면 저장되지 않은 변경을 먼저 저장하고, 불변 `settings_snapshot`을 가진 새 렌더 버전을 만듭니다. 진행 중에는 1.5초마다 상태를 조회합니다. 완료되면 실제 생성된 MP4 플레이어, 파일 정보, 다운로드와 최근 5개 버전이 표시됩니다. 다시 편집한 뒤 생성하면 이전 파일을 덮어쓰지 않고 다음 버전이 만들어집니다.
 
-제목과 위치 범위 기반의 다중 노란색 강조는 번들된 Pretendard Black으로 투명 PNG를 만들고, 자막은 번들된 Nanum Myeongjo로 cue별 투명 PNG를 만든 뒤 해당 상대 시간에만 FFmpeg overlay 합니다. 제목은 `900` 굵기와 `-0.03em` 자간을 사용합니다. 제목 범위는 프론트엔드와 백엔드 모두 Unicode code point 기준의 `[start, end)`로 처리합니다. 이 방식은 로컬 FFmpeg가 libass 필터 없이 설치된 경우에도 같은 한글 글꼴을 보장합니다. Pretendard 라이선스는 `licenses/Pretendard-LICENSE.txt`, Nanum 라이선스는 `backend/assets/fonts/OFL.txt`에 포함되어 있습니다.
+제목과 위치 범위 기반의 다중 노란색 강조는 번들된 Pretendard Black으로 투명 PNG를 만들고, 자막은 번들된 Nanum Myeongjo로 cue별 투명 PNG를 만듭니다. 제목·현재 cue·교회 배너를 시간순 투명 이미지 타임라인 하나로 합친 뒤 FFmpeg에서 원본 영상 위에 overlay하므로 1GB 배포 환경에서도 여러 전체 화면 레이어를 동시에 열지 않습니다. 제목은 `900` 굵기와 `-0.03em` 자간을 사용합니다. 제목 범위는 프론트엔드와 백엔드 모두 Unicode code point 기준의 `[start, end)`로 처리합니다. 이 방식은 로컬 FFmpeg가 libass 필터 없이 설치된 경우에도 같은 한글 글꼴을 보장합니다. Pretendard 라이선스는 `licenses/Pretendard-LICENSE.txt`, Nanum 라이선스는 `backend/assets/fonts/OFL.txt`에 포함되어 있습니다.
 
 제목은 서버의 `calculate_title_layout()`이 1080×1920 기준으로 줄바꿈, 글자 크기, 줄간격과 위치를 한 번만 계산합니다. 편집 미리보기는 `POST /api/title-layout/preview`가 같은 Pretendard Black 파일로 만든 투명 PNG를 축소 표시하고, 최종 렌더는 렌더 시작 시 `settings_snapshot.title_layout`에 저장된 동일 레이아웃을 사용합니다. 3줄 제목은 그대로 유지하며 제목 영역을 실제로 넘는 경우에만 자동 축소합니다.
 
@@ -195,6 +195,33 @@ docker compose up --build
 
 로컬 개발은 위의 개별 실행 방식을 권장합니다. Docker에서는 SQLite 데이터가 `app-data` 이름의 볼륨에 유지됩니다.
 
+## Railway 단일 Web Service 배포
+
+현재 운영 주소는 [https://church-sermon-shorts-production.up.railway.app](https://church-sermon-shorts-production.up.railway.app)입니다. 루트 `Dockerfile`로 Next.js와 FastAPI를 한 컨테이너에서 실행하며, Railway가 주입한 `PORT`를 FastAPI가 사용하고 Next.js는 내부 `127.0.0.1:3000`에서 동작합니다.
+
+운영 설정:
+
+- GitHub 비공개 저장소의 `main` 브랜치와 연결하고 push 시 자동 배포
+- Health Check Path: `/health`
+- 공개 도메인 target port: Railway가 주입한 `PORT`(현재 `8080`)
+- Persistent Volume mount path: `/var/data`
+- `DATA_DIR=/var/data`
+- `DATABASE_URL=sqlite:////var/data/sermon_shorts.db`
+- `UPLOAD_DIR=/var/data/uploads`
+- `PROCESSED_DIR=/var/data/processed`
+- 같은 origin을 사용하므로 `CORS_ORIGINS`는 빈 값
+- 실제 분석은 `USE_MOCK_AI=false`; OpenAI 키와 모델명은 Railway Variables에만 저장
+
+이후 수정 배포는 로컬 프로젝트에서 다음 순서로 진행합니다.
+
+```bash
+git add <수정한 파일>
+git commit -m "변경 내용"
+git push origin main
+```
+
+push가 끝나면 Railway가 자동으로 새 이미지를 빌드하고 `/health` 검증을 통과한 뒤 교체합니다. SQLite, 업로드 원본, 추출 파일과 완성 MP4는 `/var/data` Volume에 남으므로 정상 재배포에서는 유지됩니다.
+
 ## Render 단일 Web Service 배포
 
 루트 [Dockerfile](./Dockerfile)은 기존 Next.js와 FastAPI 구조를 유지한 채 하나의 Render Docker Web Service에서 두 프로세스를 실행합니다. FastAPI가 Render의 외부 `PORT`를 받고 `/api`, `/health`, 영상 스트리밍을 직접 처리하며, 나머지 화면 요청은 컨테이너 내부 `127.0.0.1:3000`의 Next.js로 전달합니다. 프로덕션 프론트엔드는 같은 origin의 상대 `/api` 경로를 사용합니다.
@@ -252,7 +279,7 @@ Render Persistent Disk는 유료 Web Service에서만 연결할 수 있습니다
 - OpenAI 계정/모델별 파일 크기와 출력 형식 지원 차이에 따라 전사 모델 설정을 조정해야 할 수 있습니다.
 - SQLite와 로컬 디스크는 단일 서버 MVP 용도입니다.
 - 아주 짧은 영상, 문장 경계가 드문 대본, 후보 소재가 부족한 설교에서는 엄격한 4개/30초 기준을 만족하지 못할 수 있습니다.
-- 실제 AI 모드는 유효한 API 키로 통합 테스트하지 않았으며 Mock과 서비스 mock으로 검증합니다.
+- OpenAI 모델의 응답 형식이나 사용 한도 변경 시 실제 모드 분석이 실패할 수 있으므로 Railway 로그와 사용자 오류 메시지를 함께 확인해야 합니다.
 - 브라우저 성능에 따라 Canvas 미리보기 프레임률이 원본보다 낮을 수 있습니다.
 - 브라우저 CSS와 Pillow의 글자 폭 계산 차이 때문에 아주 긴 제목의 자동 줄바꿈은 수 픽셀 정도 다를 수 있습니다.
 - 렌더 취소는 이번 MVP에 포함하지 않았습니다. 진행 중 중복 생성은 차단됩니다.
