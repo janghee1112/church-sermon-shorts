@@ -18,7 +18,7 @@ from app.services.render_service import (
     recover_stalled_render_jobs,
     validate_rendered_file,
 )
-from app.services.subtitle_renderer import build_relative_cues
+from app.services.subtitle_renderer import build_relative_cues, render_subtitle_timeline
 from app.services.title_renderer import TITLE_LETTER_SPACING_EM, calculate_title_layout, render_title_png
 
 
@@ -115,7 +115,7 @@ def test_ffmpeg_command_does_not_apply_video_darkness(tmp_path):
         ffmpeg_binary="ffmpeg",
         source_path=tmp_path / "source.mp4",
         title_path=tmp_path / "title.png",
-        subtitle_images=[],
+        subtitle_manifest_path=tmp_path / "subtitles.ffconcat",
         banner_path=tmp_path / "banner.png",
         banner_width=626,
         banner_height=122,
@@ -142,7 +142,8 @@ def test_ffmpeg_command_applies_matching_video_and_audio_speed(tmp_path):
     crop = calculate_render_crop(1920, 1080, 1080, 922, 1.12, 0.5, 0.5)
     command = build_ffmpeg_command(
         ffmpeg_binary="ffmpeg", source_path=tmp_path / "source.mp4", title_path=tmp_path / "title.png",
-        subtitle_images=[], banner_path=tmp_path / "banner.png", banner_width=497, banner_height=100,
+        subtitle_manifest_path=tmp_path / "subtitles.ffconcat",
+        banner_path=tmp_path / "banner.png", banner_width=497, banner_height=100,
         banner_x=292, banner_y=1594, temporary_output=tmp_path / "output.mp4", start_sec=10,
         duration_sec=60, playback_rate=1.2, canvas_width=1080, canvas_height=1920, fps=30,
         crf=20, preset="medium", video_top=576, video_height=922, crop=crop,
@@ -153,6 +154,42 @@ def test_ffmpeg_command_applies_matching_video_and_audio_speed(tmp_path):
     assert command[command.index("-af") + 1] == "atempo=1.200000,asetpts=PTS-STARTPTS"
     output_limit_index = command.index("-t", command.index("-af"))
     assert command[output_limit_index + 1] == "50.000"
+
+
+def test_ffmpeg_command_uses_one_concat_subtitle_timeline(tmp_path):
+    crop = calculate_render_crop(1920, 1080, 1080, 922, 1.12, 0.5, 0.5)
+    command = build_ffmpeg_command(
+        ffmpeg_binary="ffmpeg", source_path=tmp_path / "source.mp4", title_path=tmp_path / "title.png",
+        subtitle_manifest_path=tmp_path / "subtitles.ffconcat",
+        banner_path=tmp_path / "banner.png", banner_width=497, banner_height=100,
+        banner_x=292, banner_y=1594, temporary_output=tmp_path / "output.mp4", start_sec=10,
+        duration_sec=45, canvas_width=1080, canvas_height=1920, fps=30, crf=20,
+        preset="medium", video_top=576, video_height=922, crop=crop,
+    )
+    graph = command[command.index("-filter_complex") + 1]
+    assert "[2:v]format=rgba" in graph
+    assert command.count("-i") == 4
+    assert command[command.index("-f") + 1] == "concat"
+
+
+def test_concat_subtitle_timeline_contains_cues_and_gaps(tmp_path):
+    settings = get_settings()
+    output, assets = render_subtitle_timeline(
+        tmp_path,
+        [{"start_sec": 0.5, "end_sec": 2.25, "text": "실제 전사 자막"}],
+        1080,
+        1920,
+        settings.subtitle_font_path,
+        52,
+        0.21,
+        3.0,
+    )
+    contents = output.read_text(encoding="utf-8")
+    assert "duration 0.500000" in contents
+    assert "duration 1.750000" in contents
+    assert "duration 0.750000" in contents
+    assert "subtitle_001.png" in contents
+    assert all(path.is_file() for path in assets)
 
 
 def test_pretendard_black_is_the_same_frontend_and_backend_asset():

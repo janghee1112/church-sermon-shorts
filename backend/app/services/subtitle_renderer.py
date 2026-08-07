@@ -139,3 +139,42 @@ def render_subtitle_images(
         image.save(path, format="PNG")
         rendered.append((path, float(cue["start_sec"]), float(cue["end_sec"])))
     return rendered
+
+
+def render_subtitle_timeline(
+    output_directory: Path,
+    cues: Iterable[Mapping[str, object]],
+    canvas_width: int,
+    canvas_height: int,
+    font_path: Path,
+    font_size: int,
+    position_y: float,
+    duration_sec: float,
+) -> tuple[Path, list[Path]]:
+    from PIL import Image
+
+    rendered = render_subtitle_images(
+        output_directory, cues, canvas_width, canvas_height, font_path, font_size, position_y,
+    )
+    blank_path = output_directory / "subtitle_blank.png"
+    Image.new("RGBA", (canvas_width, canvas_height), (0, 0, 0, 0)).save(blank_path, format="PNG")
+    manifest_path = output_directory / "subtitles.ffconcat"
+    lines = ["ffconcat version 1.0"]
+    cursor = 0.0
+    assets = [blank_path]
+
+    for image_path, cue_start, cue_end in sorted(rendered, key=lambda item: item[1]):
+        start = max(cursor, min(duration_sec, cue_start))
+        end = max(start, min(duration_sec, cue_end))
+        if start > cursor + 0.001:
+            lines.extend([f"file '{blank_path.name}'", f"duration {start - cursor:.6f}"])
+        if end > start + 0.001:
+            lines.extend([f"file '{image_path.name}'", f"duration {end - start:.6f}"])
+            cursor = end
+        assets.append(image_path)
+
+    if duration_sec > cursor + 0.001:
+        lines.extend([f"file '{blank_path.name}'", f"duration {duration_sec - cursor:.6f}"])
+    lines.append(f"file '{blank_path.name}'")
+    manifest_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return manifest_path, assets

@@ -19,7 +19,7 @@ from app.services.ffmpeg_filter_builder import build_ffmpeg_command
 from app.services.render_crop import calculate_render_crop
 from app.services.render_assets import calculate_banner_layout, get_template_banner, inspect_banner_asset
 from app.services.render_file_service import safe_download_name
-from app.services.subtitle_renderer import build_relative_cues, render_subtitle_images
+from app.services.subtitle_renderer import build_relative_cues, render_subtitle_timeline
 from app.services.title_renderer import (
     TitleLayout,
     TitleRenderError,
@@ -365,9 +365,9 @@ def process_render_job(db: Session, render_id: int) -> None:
         if not relative_cues:
             raise RenderError("렌더링할 유효한 자막이 없습니다.", "subtitles_missing")
         subtitle_size = round(52 * min(1.5, max(0.7, float(snapshot["subtitle_font_scale"]))))
-        subtitle_images = render_subtitle_images(
-            work_dir, relative_cues, width, height, subtitle_font,
-            subtitle_size, float(snapshot["subtitle_position_y"]),
+        subtitle_manifest_path, subtitle_assets = render_subtitle_timeline(
+            work_dir, relative_cues, width, height, subtitle_font, subtitle_size,
+            float(snapshot["subtitle_position_y"]), output_duration,
         )
 
         step = "composing_video"
@@ -396,7 +396,8 @@ def process_render_job(db: Session, render_id: int) -> None:
             raise RenderError("교회 배너가 영상 영역과 겹칩니다.", "banner_layout_invalid")
         command = build_ffmpeg_command(
             ffmpeg_binary="ffmpeg", source_path=source_path, title_path=title_path,
-            subtitle_images=subtitle_images, banner_path=banner_path,
+            subtitle_manifest_path=subtitle_manifest_path,
+            banner_path=banner_path,
             banner_width=banner_layout.width, banner_height=banner_layout.height,
             banner_x=banner_layout.x, banner_y=banner_layout.y,
             temporary_output=temporary_output,
@@ -430,8 +431,9 @@ def process_render_job(db: Session, render_id: int) -> None:
         metadata = validate_rendered_file(temporary_output, output_duration, width, height)
         os.replace(temporary_output, final_output)
         title_path.unlink(missing_ok=True)
-        for subtitle_image, _, _ in subtitle_images:
-            subtitle_image.unlink(missing_ok=True)
+        subtitle_manifest_path.unlink(missing_ok=True)
+        for subtitle_asset in subtitle_assets:
+            subtitle_asset.unlink(missing_ok=True)
         log_path.unlink(missing_ok=True)
         job.status = "completed"
         job.progress = 100

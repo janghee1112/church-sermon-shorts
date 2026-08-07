@@ -2,12 +2,13 @@ from pathlib import Path
 
 from app.services.render_crop import RenderCrop
 
+
 def build_ffmpeg_command(
     *,
     ffmpeg_binary: str,
     source_path: Path,
     title_path: Path,
-    subtitle_images: list[tuple[Path, float, float]],
+    subtitle_manifest_path: Path,
     banner_path: Path,
     banner_width: int,
     banner_height: int,
@@ -39,29 +40,23 @@ def build_ffmpeg_command(
         "[1:v]format=rgba[title_layer]",
         "[video_layer][title_layer]overlay=0:0:shortest=1[title_composite]",
     ]
-    current_label = "title_composite"
-    for index, (_, cue_start, cue_end) in enumerate(subtitle_images, start=2):
-        subtitle_label = f"subtitle_layer_{index}"
-        output_label = f"subtitle_composite_{index}"
-        filter_parts.append(f"[{index}:v]format=rgba[{subtitle_label}]")
-        filter_parts.append(
-            f"[{current_label}][{subtitle_label}]overlay=0:0:enable='between(t,{cue_start:.3f},{cue_end:.3f})'[{output_label}]"
-        )
-        current_label = output_label
-    banner_input_index = len(subtitle_images) + 2
+    filter_parts.extend([
+        "[2:v]format=rgba,setpts=PTS-STARTPTS[subtitle_layer]",
+        "[title_composite][subtitle_layer]overlay=0:0:shortest=1[subtitle_composite]",
+    ])
+    banner_input_index = 3
     filter_parts.append(
         f"[{banner_input_index}:v]scale={banner_width}:{banner_height}:flags=lanczos,format=rgba[banner_layer]"
     )
     filter_parts.append(
-        f"[{current_label}][banner_layer]overlay={banner_x}:{banner_y}:shortest=1[outv]"
+        f"[subtitle_composite][banner_layer]overlay={banner_x}:{banner_y}:shortest=1[outv]"
     )
     command = [
         ffmpeg_binary, "-y", "-hide_banner", "-loglevel", "warning",
         "-ss", f"{start_sec:.3f}", "-t", f"{duration_sec:.3f}", "-i", str(source_path),
         "-loop", "1", "-framerate", str(fps), "-i", str(title_path),
+        "-f", "concat", "-safe", "0", "-i", str(subtitle_manifest_path),
     ]
-    for subtitle_path, _, _ in subtitle_images:
-        command.extend(["-loop", "1", "-framerate", str(fps), "-i", str(subtitle_path)])
     command.extend(["-loop", "1", "-framerate", str(fps), "-i", str(banner_path)])
     command.extend([
         "-filter_complex", ";".join(filter_parts),
