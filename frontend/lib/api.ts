@@ -41,6 +41,14 @@ export const getTranscript = (projectId: string) =>
 export const getCandidates = (projectId: string) =>
   fetch(`${API_BASE}/api/projects/${projectId}/candidates`).then(parseResponse<CandidateResults>);
 
+export async function deleteProject(projectId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/projects/${projectId}`, { method: "DELETE" });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { detail?: string };
+    throw new Error(payload.detail ?? "현재 작업을 정리하지 못했습니다. 다시 시도해 주세요.");
+  }
+}
+
 export const videoUrl = (projectId: string) => `${API_BASE}/api/projects/${projectId}/video`;
 
 export const getTitleLayoutPreview = (

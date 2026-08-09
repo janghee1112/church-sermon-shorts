@@ -15,7 +15,8 @@ from app.core.config import get_settings
 from app.database.session import get_db
 from app.models import CandidateTitle, ClipCandidate, Project, TranscriptSegment
 from app.schemas.api import CandidatesResponse, ProjectResponse, TranscriptResponse
-from app.services.project_service import analyze_project, delete_project_files, project_to_dict
+from app.services.project_cleanup_service import ProjectCleanupError, cleanup_project
+from app.services.project_service import analyze_project, project_to_dict
 from app.services.video_service import VideoProcessingError, VideoService
 
 
@@ -256,9 +257,8 @@ def stream_video(project_id: str, range_header: Optional[str] = Header(None, ali
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_project(project_id: str, db: Session = Depends(get_db)) -> Response:
     project = get_project_or_404(project_id, db)
-    if project.status in IN_PROGRESS:
-        raise HTTPException(status_code=409, detail="분석 중인 프로젝트는 완료 또는 실패 후 삭제해 주세요.")
-    delete_project_files(project)
-    db.delete(project)
-    db.commit()
+    try:
+        cleanup_project(db, project)
+    except ProjectCleanupError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)

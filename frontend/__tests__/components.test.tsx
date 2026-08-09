@@ -104,3 +104,45 @@ it("does not show the mock warning in real mode", () => {
   render(<VideoWorkspace project={project} transcript={transcript} results={results} onNewProject={vi.fn()} />);
   expect(screen.queryByText(/현재 Mock 모드입니다/)).not.toBeInTheDocument();
 });
+
+it("deletes the current project only after explicit new-video confirmation", async () => {
+  const onNewProject = vi.fn();
+  const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+  vi.stubGlobal("fetch", fetchMock);
+  window.localStorage.setItem("sermon-shorts-project-id", project.project_id);
+  render(<VideoWorkspace project={project} transcript={transcript} results={results} onNewProject={onNewProject} />);
+
+  await userEvent.click(screen.getByRole("button", { name: "새 영상 분석" }));
+  expect(screen.getByRole("dialog")).toHaveTextContent("현재 작업 중인 영상과 편집 결과가 모두 삭제됩니다.");
+  expect(fetchMock).not.toHaveBeenCalled();
+
+  await userEvent.click(screen.getByRole("button", { name: "취소" }));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(fetchMock).not.toHaveBeenCalled();
+  expect(onNewProject).not.toHaveBeenCalled();
+
+  await userEvent.click(screen.getByRole("button", { name: "새 영상 분석" }));
+  await userEvent.click(screen.getByRole("button", { name: "현재 작업 삭제 후 새 영상 시작" }));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("http://localhost:8000/api/projects/p1", { method: "DELETE" }));
+  expect(window.localStorage.getItem("sermon-shorts-project-id")).toBeNull();
+  expect(onNewProject).toHaveBeenCalledOnce();
+  vi.unstubAllGlobals();
+});
+
+it("keeps the current project when cleanup fails", async () => {
+  const onNewProject = vi.fn();
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ detail: "현재 쇼츠 영상 생성이 진행 중입니다." }), {
+    status: 409,
+    headers: { "Content-Type": "application/json" },
+  })));
+  window.localStorage.setItem("sermon-shorts-project-id", project.project_id);
+  render(<VideoWorkspace project={project} transcript={transcript} results={results} onNewProject={onNewProject} />);
+
+  await userEvent.click(screen.getByRole("button", { name: "새 영상 분석" }));
+  await userEvent.click(screen.getByRole("button", { name: "현재 작업 삭제 후 새 영상 시작" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("현재 쇼츠 영상 생성이 진행 중입니다.");
+  expect(window.localStorage.getItem("sermon-shorts-project-id")).toBe(project.project_id);
+  expect(onNewProject).not.toHaveBeenCalled();
+  vi.unstubAllGlobals();
+});

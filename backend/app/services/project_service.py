@@ -1,6 +1,5 @@
 import json
 import logging
-import shutil
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
@@ -268,17 +267,6 @@ def _replace_candidates(
             ))
         previous_end = end_sec
     db.commit()
-
-
-def delete_project_files(project: Project) -> None:
-    settings = get_settings()
-    video_path = Path(project.stored_file_path).resolve()
-    upload_root = settings.upload_dir.resolve()
-    if upload_root in video_path.parents and video_path.exists():
-        video_path.unlink()
-    processed_path = (settings.processed_dir / project.id).resolve()
-    if settings.processed_dir.resolve() in processed_path.parents and processed_path.exists():
-        shutil.rmtree(processed_path)
 
 
 def project_to_dict(project: Project) -> Dict[str, object]:

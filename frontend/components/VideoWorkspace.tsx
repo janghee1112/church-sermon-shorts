@@ -5,6 +5,7 @@ import { formatTime } from "@/lib/time";
 import { videoUrl } from "@/lib/api";
 import type { Candidate, CandidateResults, Project, Transcript } from "@/types";
 import { CandidateEditButton } from "@/components/CandidateEditButton";
+import { NewProjectButton } from "@/components/NewProjectButton";
 
 interface Props {
   project: Project;
@@ -86,7 +87,7 @@ export function VideoWorkspace({ project, transcript, results, onNewProject }: P
       <header className="sticky top-0 z-20 border-b border-ink/10 bg-cream/85 px-5 py-4 backdrop-blur-xl sm:px-8">
         <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-moss text-white">✦</span><div className="min-w-0"><p className="serif text-lg font-bold">말씀컷</p><p className="truncate text-xs text-ink/45">{project.original_file_name}</p></div></div>
-          <button onClick={onNewProject} className="focus-ring shrink-0 rounded-xl border border-ink/15 bg-white px-4 py-2 text-sm font-bold">새 영상 분석</button>
+          <NewProjectButton projectId={project.project_id} onDeleted={onNewProject} className="focus-ring shrink-0 rounded-xl border border-ink/15 bg-white px-4 py-2 text-sm font-bold" />
         </div>
       </header>
 

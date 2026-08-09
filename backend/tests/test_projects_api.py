@@ -2,7 +2,17 @@ import json
 from pathlib import Path
 from uuid import uuid4
 
-from app.models import CandidateTitle, ClipCandidate, Project, TranscriptSegment
+from sqlalchemy import func, select
+
+from app.models import (
+    CandidateTitle,
+    ClipCandidate,
+    ClipDraft,
+    DraftSubtitle,
+    Project,
+    RenderJob,
+    TranscriptSegment,
+)
 
 
 def upload(client, path: Path, content_type: str = "video/mp4"):
@@ -106,3 +116,103 @@ def test_delete_removes_database_and_files(client, db_session, tmp_path):
     assert not video_path.exists()
     assert not processed.exists()
     assert db_session.get(Project, project.id) is None
+
+
+def test_delete_removes_draft_subtitles_all_render_versions_and_preserves_other_project(client, db_session, tmp_path):
+    project = seed_completed_project(db_session, tmp_path)
+    other_project = seed_completed_project(db_session, tmp_path)
+    segment = db_session.scalar(
+        select(TranscriptSegment).where(TranscriptSegment.project_id == project.id).order_by(TranscriptSegment.id)
+    )
+    candidate = db_session.scalar(
+        select(ClipCandidate).where(ClipCandidate.project_id == project.id).order_by(ClipCandidate.id)
+    )
+    assert segment is not None and candidate is not None
+    candidate.start_segment_id = segment.id
+    candidate.end_segment_id = segment.id
+    draft = ClipDraft(
+        project_id=project.id, candidate_id=candidate.id,
+        start_segment_id=segment.id, end_segment_id=segment.id,
+        start_sec=segment.start_sec, end_sec=segment.end_sec,
+        duration_sec=segment.end_sec - segment.start_sec,
+    )
+    db_session.add(draft)
+    db_session.flush()
+    subtitle = DraftSubtitle(
+        draft_id=draft.id, cue_order=1, start_sec=segment.start_sec, end_sec=segment.end_sec,
+        original_text=segment.text, edited_text=segment.text,
+    )
+    db_session.add(subtitle)
+    processed = tmp_path / "processed" / project.id
+    renders_dir = processed / "renders"
+    renders_dir.mkdir(parents=True)
+    for version in range(1, 4):
+        output = renders_dir / f"v{version}.mp4"
+        output.write_bytes(f"render-{version}".encode())
+        db_session.add(RenderJob(
+            project_id=project.id, draft_id=draft.id, version=version,
+            status="completed", progress=100, current_step="finalizing",
+            output_file_path=str(output), output_file_name=output.name,
+            output_file_size=output.stat().st_size, settings_snapshot="{}",
+        ))
+    other_processed = tmp_path / "processed" / other_project.id
+    other_processed.mkdir(parents=True)
+    other_file = other_processed / "keep.wav"
+    other_file.write_bytes(b"keep")
+    shared_file = tmp_path / "processed" / "shared-asset.png"
+    shared_file.write_bytes(b"shared")
+    db_session.commit()
+
+    response = client.delete(f"/api/projects/{project.id}")
+
+    assert response.status_code == 204
+    assert db_session.get(Project, project.id) is None
+    assert db_session.scalar(select(func.count()).select_from(ClipDraft).where(ClipDraft.project_id == project.id)) == 0
+    assert db_session.scalar(select(func.count()).select_from(RenderJob).where(RenderJob.project_id == project.id)) == 0
+    assert not processed.exists()
+    assert db_session.get(Project, other_project.id) is not None
+    assert Path(other_project.stored_file_path).exists()
+    assert other_file.read_bytes() == b"keep"
+    assert shared_file.read_bytes() == b"shared"
+
+
+def test_delete_rejects_active_render_without_removing_project(client, db_session, tmp_path):
+    project = seed_completed_project(db_session, tmp_path)
+    segment = db_session.scalar(select(TranscriptSegment).where(TranscriptSegment.project_id == project.id))
+    candidate = db_session.scalar(select(ClipCandidate).where(ClipCandidate.project_id == project.id))
+    assert segment is not None and candidate is not None
+    draft = ClipDraft(
+        project_id=project.id, candidate_id=candidate.id,
+        start_segment_id=segment.id, end_segment_id=segment.id,
+        start_sec=segment.start_sec, end_sec=segment.end_sec,
+        duration_sec=segment.end_sec - segment.start_sec,
+    )
+    db_session.add(draft)
+    db_session.flush()
+    db_session.add(RenderJob(
+        project_id=project.id, draft_id=draft.id, version=1,
+        status="rendering", progress=50, current_step="encoding", settings_snapshot="{}",
+    ))
+    db_session.commit()
+
+    response = client.delete(f"/api/projects/{project.id}")
+
+    assert response.status_code == 409
+    assert "생성이 진행 중" in response.json()["detail"]
+    assert db_session.get(Project, project.id) is not None
+    assert Path(project.stored_file_path).exists()
+
+
+def test_delete_rejects_file_outside_upload_root(client, db_session, tmp_path):
+    project = seed_completed_project(db_session, tmp_path)
+    outside = tmp_path / "outside.mp4"
+    outside.write_bytes(b"outside")
+    project.stored_file_path = str(outside)
+    db_session.commit()
+
+    response = client.delete(f"/api/projects/{project.id}")
+
+    assert response.status_code == 409
+    assert "안전하게 확인" in response.json()["detail"]
+    assert outside.read_bytes() == b"outside"
+    assert db_session.get(Project, project.id) is not None

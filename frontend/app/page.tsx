@@ -6,8 +6,7 @@ import type { CandidateResults, Project, Transcript } from "@/types";
 import { UploadPanel } from "@/components/UploadPanel";
 import { ProgressPanel } from "@/components/ProgressPanel";
 import { VideoWorkspace } from "@/components/VideoWorkspace";
-
-const STORAGE_KEY = "sermon-shorts-project-id";
+import { clearProjectStorage, PROJECT_STORAGE_KEY } from "@/lib/projectStorage";
 
 export default function Home() {
   const [project, setProject] = useState<Project | null>(null);
@@ -18,9 +17,9 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
+    const saved = window.localStorage.getItem(PROJECT_STORAGE_KEY);
     if (!saved) return;
-    getProject(saved).then(setProject).catch(() => window.localStorage.removeItem(STORAGE_KEY));
+    getProject(saved).then(setProject).catch(clearProjectStorage);
   }, []);
 
   useEffect(() => {
@@ -42,7 +41,7 @@ export default function Home() {
     setUploading(true); setError(null); setUploadProgress(0);
     try {
       const created = await uploadProject(file, setUploadProgress);
-      window.localStorage.setItem(STORAGE_KEY, created.project_id);
+      window.localStorage.setItem(PROJECT_STORAGE_KEY, created.project_id);
       setProject(await startAnalysis(created.project_id));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "업로드에 실패했습니다.");
@@ -55,7 +54,7 @@ export default function Home() {
   }
 
   function reset() {
-    window.localStorage.removeItem(STORAGE_KEY);
+    clearProjectStorage();
     setProject(null); setTranscript(null); setResults(null); setError(null); setUploadProgress(0);
   }
 

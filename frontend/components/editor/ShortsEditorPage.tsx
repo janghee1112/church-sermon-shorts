@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getDraft,
@@ -19,11 +20,13 @@ import { TranscriptRangeSelector } from "./TranscriptRangeSelector";
 import { VerticalVideoPreview, type VideoPreviewHandle } from "./VerticalVideoPreview";
 import { TemplateSettingsPanel } from "./TemplateSettingsPanel";
 import { RenderPanel } from "./RenderPanel";
+import { NewProjectButton } from "@/components/NewProjectButton";
 
 type SaveState = "saved" | "dirty" | "saving" | "error";
 type ConfirmAction = "range" | "reset" | null;
 
 export function ShortsEditorPage({ draftId }: { draftId: number }) {
+  const router = useRouter();
   const previewRef = useRef<VideoPreviewHandle>(null);
   const revisionRef = useRef(0);
   const savingRef = useRef(false);
@@ -172,7 +175,7 @@ export function ShortsEditorPage({ draftId }: { draftId: number }) {
   return (
     <main className="min-h-screen pb-16">
       <header className="sticky top-0 z-30 border-b border-ink/10 bg-cream/90 px-4 py-3 backdrop-blur-xl sm:px-7">
-        <div className="mx-auto flex max-w-[1600px] items-center gap-3"><Link href="/" className="focus-ring rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm font-bold">← 결과</Link><div className="min-w-0 flex-1"><h1 className="truncate font-bold">후보 {draft.candidate.candidate_order} 편집 · {draft.candidate.main_topic}</h1><p className="truncate text-xs text-ink/45">{draft.project_original_file_name}</p></div><span aria-live="polite" data-saved-at={savedDraft?.updated_at ?? ""} className={`text-xs font-bold ${saveState === "error" ? "text-red-700" : "text-ink/50"}`}>{saveState === "saved" ? "저장됨" : saveState === "saving" ? "저장 중…" : saveState === "dirty" ? "저장되지 않은 변경사항" : "저장 실패"}</span><button type="button" onClick={() => void saveAll()} className="focus-ring rounded-lg bg-moss px-4 py-2 text-sm font-bold text-white">저장</button></div>
+        <div className="mx-auto flex max-w-[1600px] items-center gap-3"><Link href="/" className="focus-ring rounded-lg border border-ink/10 bg-white px-3 py-2 text-sm font-bold">← 결과</Link><div className="min-w-0 flex-1"><h1 className="truncate font-bold">후보 {draft.candidate.candidate_order} 편집 · {draft.candidate.main_topic}</h1><p className="truncate text-xs text-ink/45">{draft.project_original_file_name}</p></div><span aria-live="polite" data-saved-at={savedDraft?.updated_at ?? ""} className={`text-xs font-bold ${saveState === "error" ? "text-red-700" : "text-ink/50"}`}>{saveState === "saved" ? "저장됨" : saveState === "saving" ? "저장 중…" : saveState === "dirty" ? "저장되지 않은 변경사항" : "저장 실패"}</span><NewProjectButton projectId={draft.project_id} onDeleted={() => router.replace("/")} className="focus-ring rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-bold text-red-700" /><button type="button" onClick={() => void saveAll()} className="focus-ring rounded-lg bg-moss px-4 py-2 text-sm font-bold text-white">저장</button></div>
       </header>
       {draft.analysis_mode === "mock" && <div role="alert" className="mx-auto mt-5 max-w-[1600px] px-4 sm:px-7"><div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900">현재 Mock 모드입니다. 편집할 대본과 추천 구간은 실제 영상을 분석한 결과가 아닙니다.</div></div>}
       {error && <div role="alert" className="mx-auto mt-4 max-w-[1600px] px-4 text-sm font-bold text-red-700 sm:px-7">{error}</div>}
