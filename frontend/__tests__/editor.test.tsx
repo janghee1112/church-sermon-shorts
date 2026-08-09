@@ -333,6 +333,7 @@ it("shows the new draft defaults and the 22 to 34 percent video-area range", () 
 it("updates title and visual sliders with exact template values", () => {
   const onChange = vi.fn();
   render(<TemplateSettingsPanel settings={visualSettings} currentSubtitle={subtitles[0]} showSafeAreas onShowSafeAreasChange={vi.fn()} onChange={onChange} />);
+  expect(screen.getByLabelText("제목 아래로 내리기")).toHaveAttribute("min", "0.11");
   fireEvent.change(screen.getByLabelText("쇼츠 큰 제목"), { target: { value: "하나님을\n움직이시게 하는 사람" } });
   fireEvent.change(screen.getByLabelText("영상 확대"), { target: { value: "1.3" } });
   fireEvent.change(screen.getByLabelText("영상 가로 위치"), { target: { value: "0.7" } });

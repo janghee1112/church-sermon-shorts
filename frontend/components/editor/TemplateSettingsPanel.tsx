@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SERMON_LETTERBOX_TEMPLATE } from "@/lib/sermonTemplate";
 import type { DraftSubtitle, DraftVisualSettings } from "@/types";
 import { TitleHighlightEditor } from "./TitleHighlightEditor";
@@ -46,6 +46,9 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
 
 export function TemplateSettingsPanel({ settings, currentSubtitle, showSafeAreas, onShowSafeAreasChange, onChange }: Props) {
   const [highlightResetNotice, setHighlightResetNotice] = useState(false);
+  const initialTitlePositionRef = useRef(Math.max(SERMON_LETTERBOX_TEMPLATE.titlePositionMin, settings.title_position_y));
+  const titlePositionMinimum = initialTitlePositionRef.current;
+  const titlePositionMaximum = Math.max(titlePositionMinimum, SERMON_LETTERBOX_TEMPLATE.titlePositionMax);
   const titleLines = settings.custom_title ? settings.custom_title.split("\n").length : 0;
   const subtitleText = currentSubtitle ? currentSubtitle.edited_text || currentSubtitle.original_text : "";
   const subtitleLines = subtitleText ? subtitleText.split("\n").length : 0;
@@ -72,7 +75,7 @@ export function TemplateSettingsPanel({ settings, currentSubtitle, showSafeAreas
       <TitleHighlightEditor title={settings.custom_title} ranges={settings.title_highlight_ranges} onChange={(title_highlight_ranges) => onChange({ title_highlight_ranges })} />
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
         <Slider label="제목 글자 크기" value={settings.title_font_scale} minimum={0.7} maximum={1.5} step={0.01} display={`${Math.round(settings.title_font_scale * 100)}%`} onChange={(value) => onChange({ title_font_scale: value })} />
-        <Slider label="제목 아래로 내리기" value={settings.title_position_y} minimum={SERMON_LETTERBOX_TEMPLATE.titlePositionMin} maximum={SERMON_LETTERBOX_TEMPLATE.titlePositionMax} step={0.01} display={settings.title_position_y <= SERMON_LETTERBOX_TEMPLATE.titlePositionMin ? "기본 위치" : `아래 ${Math.round(((settings.title_position_y - SERMON_LETTERBOX_TEMPLATE.titlePositionMin) / (SERMON_LETTERBOX_TEMPLATE.titlePositionMax - SERMON_LETTERBOX_TEMPLATE.titlePositionMin)) * 100)}%`} onChange={(value) => onChange({ title_position_y: value })} />
+        <Slider label="제목 아래로 내리기" value={settings.title_position_y} minimum={titlePositionMinimum} maximum={titlePositionMaximum} step={0.01} display={settings.title_position_y <= titlePositionMinimum ? "현재 위치" : `아래 ${Math.round(((settings.title_position_y - titlePositionMinimum) / (titlePositionMaximum - titlePositionMinimum)) * 100)}%`} onChange={(value) => onChange({ title_position_y: value })} />
       </div>
     </section>
 
