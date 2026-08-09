@@ -290,7 +290,7 @@ export const VerticalVideoPreview = forwardRef<VideoPreviewHandle, Props>(functi
             className="pointer-events-none absolute z-20 h-auto select-none object-contain"
             style={{
               left: `${SERMON_LETTERBOX_TEMPLATE.banner.positionX * 100}%`,
-              top: `${SERMON_LETTERBOX_TEMPLATE.banner.positionY * 100}%`,
+              top: `${Number((SERMON_LETTERBOX_TEMPLATE.banner.positionY * 100).toFixed(2))}%`,
               width: `${Number((SERMON_LETTERBOX_TEMPLATE.banner.widthRatio * 100).toFixed(2))}%`,
               transform: "translateX(-50%)",
             }}

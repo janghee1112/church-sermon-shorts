@@ -215,6 +215,7 @@ export type DraftEditableSettings = Pick<
   | "video_area_position_y"
   | "video_area_height"
   | "title_font_scale"
+  | "title_position_y"
   | "subtitle_font_scale"
   | "subtitle_position_y"
   | "playback_rate"

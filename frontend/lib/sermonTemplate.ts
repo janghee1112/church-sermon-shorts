@@ -12,6 +12,8 @@ export const SERMON_LETTERBOX_TEMPLATE = {
   defaultCropPositionY: 0.42,
   defaultTitleFontScale: 1.2,
   defaultTitlePositionY: 0.08,
+  titlePositionMin: 0.08,
+  titlePositionMax: 0.2,
   defaultSubtitleFontScale: 1,
   defaultSubtitlePositionY: 0.24,
   defaultVideoAreaPositionY: 0.28,
@@ -28,7 +30,7 @@ export const SERMON_LETTERBOX_TEMPLATE = {
     sourceHeight: 361,
     widthRatio: 0.46,
     positionX: 0.5,
-    positionY: 0.83,
+    positionY: 0.822,
   },
 } as const;
 

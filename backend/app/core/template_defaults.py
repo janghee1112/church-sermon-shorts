@@ -11,7 +11,7 @@ SERMON_LETTERBOX_SUBTITLE_FONT_SCALE = 1.00
 SERMON_LETTERBOX_SUBTITLE_POSITION_Y = 0.24
 SERMON_LETTERBOX_BANNER_WIDTH_RATIO = 0.46
 SERMON_LETTERBOX_BANNER_POSITION_X = 0.5
-SERMON_LETTERBOX_BANNER_POSITION_Y = 0.83
+SERMON_LETTERBOX_BANNER_POSITION_Y = 0.822
 
 # Missing columns on legacy databases keep the historical meaning. These are
 # intentionally separate from defaults for newly created drafts.

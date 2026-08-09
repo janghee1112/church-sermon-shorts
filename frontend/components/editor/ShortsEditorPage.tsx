@@ -75,6 +75,7 @@ export function ShortsEditorPage({ draftId }: { draftId: number }) {
           video_area_position_y: snapshot.video_area_position_y,
           video_area_height: snapshot.video_area_height,
           title_font_scale: snapshot.title_font_scale,
+          title_position_y: snapshot.title_position_y,
           subtitle_font_scale: snapshot.subtitle_font_scale,
           subtitle_position_y: snapshot.subtitle_position_y,
           playback_rate: snapshot.playback_rate,

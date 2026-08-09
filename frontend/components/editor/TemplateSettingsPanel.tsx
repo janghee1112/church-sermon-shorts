@@ -70,7 +70,10 @@ export function TemplateSettingsPanel({ settings, currentSubtitle, showSafeAreas
       {titleLines > 2 && <p className="mt-1 text-xs font-bold text-amber-700">제목이 세 줄 이상입니다. 두 줄 이내를 권장합니다.</p>}
       {highlightResetNotice && <p role="status" className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">제목이 변경되어 기존 강조 선택이 초기화되었습니다.</p>}
       <TitleHighlightEditor title={settings.custom_title} ranges={settings.title_highlight_ranges} onChange={(title_highlight_ranges) => onChange({ title_highlight_ranges })} />
-      <div className="mt-5"><Slider label="제목 글자 크기" value={settings.title_font_scale} minimum={0.7} maximum={1.5} step={0.01} display={`${Math.round(settings.title_font_scale * 100)}%`} onChange={(value) => onChange({ title_font_scale: value })} /></div>
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <Slider label="제목 글자 크기" value={settings.title_font_scale} minimum={0.7} maximum={1.5} step={0.01} display={`${Math.round(settings.title_font_scale * 100)}%`} onChange={(value) => onChange({ title_font_scale: value })} />
+        <Slider label="제목 아래로 내리기" value={settings.title_position_y} minimum={SERMON_LETTERBOX_TEMPLATE.titlePositionMin} maximum={SERMON_LETTERBOX_TEMPLATE.titlePositionMax} step={0.01} display={settings.title_position_y <= SERMON_LETTERBOX_TEMPLATE.titlePositionMin ? "기본 위치" : `아래 ${Math.round(((settings.title_position_y - SERMON_LETTERBOX_TEMPLATE.titlePositionMin) / (SERMON_LETTERBOX_TEMPLATE.titlePositionMax - SERMON_LETTERBOX_TEMPLATE.titlePositionMin)) * 100)}%`} onChange={(value) => onChange({ title_position_y: value })} />
+      </div>
     </section>
 
     <section className="rounded-2xl bg-white p-5 shadow-soft">

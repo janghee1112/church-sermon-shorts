@@ -222,7 +222,7 @@ it("places the church banner centered inside the lower black safe area without c
   expect(banner.style.left).toBe("50%");
   expect(banner.style.transform).toBe("translateX(-50%)");
   expect(banner.style.width).toBe("46%");
-  expect(banner.style.top).toBe("83%");
+  expect(banner.style.top).toBe("82.2%");
   expect(bannerTop).toBeGreaterThan(videoBottom);
   expect(bannerTop).toBeGreaterThan(SERMON_LETTERBOX_TEMPLATE.previewHeight * visualSettings.subtitle_position_y);
   expect(bannerTop + bannerHeight).toBeLessThan(SERMON_LETTERBOX_TEMPLATE.previewHeight * 0.95);
@@ -305,7 +305,7 @@ it("uses the practical new-draft defaults without changing saved draft values", 
   expect(DEFAULT_TEMPLATE_SETTINGS.subtitle_font_scale).toBe(1);
   expect(DEFAULT_TEMPLATE_SETTINGS.title_position_y).toBe(0.08);
   expect(DEFAULT_TEMPLATE_SETTINGS.subtitle_position_y).toBe(0.24);
-  expect(SERMON_LETTERBOX_TEMPLATE.banner.positionY).toBe(0.83);
+  expect(SERMON_LETTERBOX_TEMPLATE.banner.positionY).toBe(0.822);
   expect(SERMON_LETTERBOX_TEMPLATE.banner.widthRatio).toBe(0.46);
   expect(visualSettings.video_area_position_y).toBe(0.34);
   expect(visualSettings.title_position_y).toBe(0.11);
@@ -316,6 +316,9 @@ it("shows the new draft defaults and the 22 to 34 percent video-area range", () 
   const settings = { custom_title: "새 제목", ...DEFAULT_TEMPLATE_SETTINGS };
   render(<TemplateSettingsPanel settings={settings} currentSubtitle={subtitles[0]} showSafeAreas onShowSafeAreasChange={vi.fn()} onChange={vi.fn()} />);
   expect(screen.getByLabelText("제목 글자 크기")).toHaveValue("1.2");
+  expect(screen.getByLabelText("제목 아래로 내리기")).toHaveValue("0.08");
+  expect(screen.getByLabelText("제목 아래로 내리기")).toHaveAttribute("min", "0.08");
+  expect(screen.getByLabelText("제목 아래로 내리기")).toHaveAttribute("max", "0.2");
   expect(screen.getByLabelText("영상 확대")).toHaveValue("1.3");
   expect(screen.getByLabelText("영상 가로 위치")).toHaveValue("0.5");
   expect(screen.getByLabelText("영상 세로 위치")).toHaveValue("0.42");
@@ -335,11 +338,13 @@ it("updates title and visual sliders with exact template values", () => {
   fireEvent.change(screen.getByLabelText("영상 가로 위치"), { target: { value: "0.7" } });
   fireEvent.change(screen.getByLabelText("영상 세로 위치"), { target: { value: "0.3" } });
   fireEvent.change(screen.getByLabelText("영상 영역 위아래 위치"), { target: { value: "0.32" } });
+  fireEvent.change(screen.getByLabelText("제목 아래로 내리기"), { target: { value: "0.18" } });
   expect(onChange).toHaveBeenCalledWith({ custom_title: "하나님을\n움직이시게 하는 사람", title_highlight_ranges: [] });
   expect(onChange).toHaveBeenCalledWith({ zoom_scale: 1.3 });
   expect(onChange).toHaveBeenCalledWith({ crop_position_x: 0.7 });
   expect(onChange).toHaveBeenCalledWith({ crop_position_y: 0.3 });
   expect(onChange).toHaveBeenCalledWith({ video_area_position_y: 0.32 });
+  expect(onChange).toHaveBeenCalledWith({ title_position_y: 0.18 });
 });
 
 it("shows simple playback presets and keeps position reset independent", async () => {
@@ -395,8 +400,9 @@ it("autosaves changed template settings and reports completion", async () => {
   const titleInput = await screen.findByLabelText("쇼츠 큰 제목");
   fireEvent.change(titleInput, { target: { value: "변경 제목" } });
   fireEvent.change(screen.getByLabelText("영상 영역 위아래 위치"), { target: { value: "0.32" } });
+  fireEvent.change(screen.getByLabelText("제목 아래로 내리기"), { target: { value: "0.18" } });
   expect(screen.getByText("저장되지 않은 변경사항")).toBeInTheDocument();
-  await waitFor(() => expect(updateDraft).toHaveBeenCalledWith(17, expect.objectContaining({ custom_title: "변경 제목", video_area_position_y: 0.32, playback_rate: 1, template_type: "sermon_letterbox_v1" })), { timeout: 1800 });
+  await waitFor(() => expect(updateDraft).toHaveBeenCalledWith(17, expect.objectContaining({ custom_title: "변경 제목", video_area_position_y: 0.32, title_position_y: 0.18, playback_rate: 1, template_type: "sermon_letterbox_v1" })), { timeout: 1800 });
   await waitFor(() => expect(screen.getByText("저장됨")).toBeInTheDocument());
 });
 
