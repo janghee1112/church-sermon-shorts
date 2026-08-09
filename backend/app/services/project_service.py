@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import logging
 from pathlib import Path
@@ -25,6 +27,7 @@ from app.services.transcription_service import (
     TranscriptionService,
 )
 from app.services.video_service import VideoProcessingError, VideoService
+from app.services.storage_service import StorageError, get_storage_service
 
 
 logger = logging.getLogger(__name__)
@@ -63,6 +66,9 @@ def analyze_project(project_id: str) -> None:
         logger.exception("Unexpected analysis failure for project %s", project_id)
         fail_project(db, project, "분석 중 예기치 않은 오류가 발생했습니다. 다시 시도해 주세요.")
     finally:
+        settings = get_settings()
+        if settings.uses_r2:
+            _cleanup_analysis_media(settings.processed_dir / project_id)
         db.close()
 
 
@@ -84,10 +90,19 @@ def run_analysis_pipeline(
         settings.audio_chunk_overlap_seconds,
     )
     update_status(db, project, "extracting_audio", 15)
-    audio_path = video_service.extract_audio(Path(project.stored_file_path), project.id)
-    video_service.validate_extracted_audio(audio_path, project.duration_seconds)
-    update_status(db, project, "extracting_audio", 25)
-    chunks = video_service.split_audio(audio_path, project.duration_seconds)
+    try:
+        if settings.uses_r2 and project.original_object_key:
+            source_input: Path | str = get_storage_service(settings).generate_download_url(
+                project.original_object_key, settings.r2_read_url_expiry_seconds
+            )
+        else:
+            source_input = Path(project.stored_file_path)
+        audio_path = video_service.extract_audio(source_input, project.id)
+        video_service.validate_extracted_audio(audio_path, project.duration_seconds)
+        update_status(db, project, "extracting_audio", 25)
+        chunks = video_service.split_audio(audio_path, project.duration_seconds)
+    except StorageError as exc:
+        raise VideoProcessingError("원본 영상을 R2에서 불러오지 못했습니다.") from exc
 
     update_status(db, project, "transcribing", 30)
     transcription_service = transcription_service or (
@@ -123,6 +138,13 @@ def run_analysis_pipeline(
     selected = normalize_and_select_candidates(analysis, stored_segments, project.duration_seconds, limit=4)
     _replace_candidates(db, project, analysis.sermon_summary, analysis.sermon_topics, selected)
     update_status(db, project, "completed", 100)
+    if settings.uses_r2:
+        _cleanup_analysis_media(settings.processed_dir / project.id)
+
+
+def _cleanup_analysis_media(project_dir: Path) -> None:
+    for path in [project_dir / "audio.mp3", project_dir / "audio.wav", *project_dir.glob("chunk-*.mp3")]:
+        path.unlink(missing_ok=True)
 
 
 def _validate_transcription_result(transcription: TranscriptionResult) -> None:
@@ -273,7 +295,7 @@ def project_to_dict(project: Project) -> Dict[str, object]:
     return {
         "project_id": project.id,
         "original_file_name": project.original_file_name,
-        "stored_file_name": Path(project.stored_file_path).name,
+        "stored_file_name": Path(project.stored_file_path).name if project.stored_file_path else "source.mp4",
         "duration_seconds": project.duration_seconds,
         "width": project.width,
         "height": project.height,

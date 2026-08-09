@@ -28,6 +28,8 @@ class Project(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     original_file_name: Mapped[str] = mapped_column(String(500))
     stored_file_path: Mapped[str] = mapped_column(String(1000))
+    original_object_key: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True, index=True)
+    original_content_type: Mapped[str] = mapped_column(String(120), default="video/mp4", server_default="video/mp4")
     duration_seconds: Mapped[float] = mapped_column(Float)
     width: Mapped[int] = mapped_column(Integer)
     height: Mapped[int] = mapped_column(Integer)
@@ -50,6 +52,26 @@ class Project(Base):
     candidates: Mapped[List["ClipCandidate"]] = relationship(cascade="all, delete-orphan", back_populates="project")
     drafts: Mapped[List["ClipDraft"]] = relationship(cascade="all, delete-orphan", back_populates="project")
     renders: Mapped[List["RenderJob"]] = relationship(cascade="all, delete-orphan", back_populates="project")
+    upload_sessions: Mapped[List["MultipartUploadSession"]] = relationship(
+        cascade="all, delete-orphan", back_populates="project"
+    )
+
+
+class MultipartUploadSession(Base):
+    __tablename__ = "multipart_upload_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    provider_upload_id: Mapped[str] = mapped_column(String(1000), unique=True)
+    object_key: Mapped[str] = mapped_column(String(1000), unique=True)
+    expected_file_size: Mapped[int] = mapped_column(Integer)
+    content_type: Mapped[str] = mapped_column(String(120))
+    part_size: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(30), default="uploading", server_default="uploading", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    project: Mapped[Project] = relationship(back_populates="upload_sessions")
 
 
 class TranscriptSegment(Base):
@@ -191,6 +213,7 @@ class RenderJob(Base):
     progress: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     current_step: Mapped[str] = mapped_column(String(40), default="validating", server_default="validating")
     output_file_path: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    output_object_key: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True, index=True)
     output_file_name: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     output_file_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     output_duration_sec: Mapped[Optional[float]] = mapped_column(Float, nullable=True)

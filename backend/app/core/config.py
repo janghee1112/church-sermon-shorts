@@ -35,6 +35,16 @@ class Settings(BaseSettings):
     subtitle_font_path: Path = PROJECT_ROOT / "backend" / "assets" / "fonts" / "NanumMyeongjo-Regular.ttf"
     title_font_name: str = "Pretendard Black"
     subtitle_font_name: str = "NanumMyeongjo"
+    storage_backend: str = "local"
+    r2_account_id: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+    r2_bucket_name: str = "sermon-shorts"
+    r2_endpoint_url: str = ""
+    r2_region: str = "auto"
+    r2_multipart_part_size_mb: int = 25
+    r2_upload_url_expiry_seconds: int = 14_400
+    r2_read_url_expiry_seconds: int = 14_400
 
     model_config = SettingsConfigDict(
         env_file=(PROJECT_ROOT / ".env", PROJECT_ROOT / "backend" / ".env"),
@@ -54,6 +64,33 @@ class Settings(BaseSettings):
     @property
     def is_development(self) -> bool:
         return self.app_env.lower() in {"development", "dev", "local"}
+
+    @property
+    def uses_r2(self) -> bool:
+        return self.storage_backend.lower() == "r2"
+
+    @property
+    def resolved_r2_endpoint_url(self) -> str:
+        if self.r2_endpoint_url.strip():
+            return self.r2_endpoint_url.rstrip("/")
+        if self.r2_account_id.strip():
+            return f"https://{self.r2_account_id}.r2.cloudflarestorage.com"
+        return ""
+
+    @field_validator("storage_backend")
+    @classmethod
+    def validate_storage_backend(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"local", "r2"}:
+            raise ValueError("STORAGE_BACKEND는 local 또는 r2여야 합니다.")
+        return normalized
+
+    @field_validator("r2_multipart_part_size_mb")
+    @classmethod
+    def validate_part_size(cls, value: int) -> int:
+        if not 5 <= value <= 512:
+            raise ValueError("R2 multipart part size는 5~512MB여야 합니다.")
+        return value
 
     @field_validator("title_font_path", "subtitle_font_path", mode="before")
     @classmethod

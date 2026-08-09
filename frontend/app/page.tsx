@@ -14,6 +14,7 @@ export default function Home() {
   const [results, setResults] = useState<CandidateResults | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadVerifying, setUploadVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -40,12 +41,12 @@ export default function Home() {
   async function handleUpload(file: File) {
     setUploading(true); setError(null); setUploadProgress(0);
     try {
-      const created = await uploadProject(file, setUploadProgress);
+      const created = await uploadProject(file, setUploadProgress, setUploadVerifying);
       window.localStorage.setItem(PROJECT_STORAGE_KEY, created.project_id);
       setProject(await startAnalysis(created.project_id));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "업로드에 실패했습니다.");
-    } finally { setUploading(false); }
+    } finally { setUploading(false); setUploadVerifying(false); }
   }
 
   async function retry() {
@@ -60,5 +61,5 @@ export default function Home() {
 
   if (project?.status === "completed" && transcript && results) return <VideoWorkspace project={project} transcript={transcript} results={results} onNewProject={reset} />;
   if (project) return <ProgressPanel project={project} onRetry={retry} />;
-  return <UploadPanel busy={uploading} progress={uploadProgress} error={error} onSubmit={handleUpload} />;
+  return <UploadPanel busy={uploading} progress={uploadProgress} verifying={uploadVerifying} error={error} onSubmit={handleUpload} />;
 }

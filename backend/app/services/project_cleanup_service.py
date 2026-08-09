@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import os
 import shutil
@@ -10,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.models import Project, RenderJob
+from app.services.storage_service import StorageError, get_storage_service
 
 
 logger = logging.getLogger(__name__)
@@ -67,9 +70,10 @@ def _path_usage(path: Path) -> tuple[int, int]:
 
 
 def collect_project_paths(project: Project, settings: Settings) -> list[Path]:
-    upload_path = _managed_path(Path(project.stored_file_path), settings.upload_dir)
     processed_path = _managed_path(settings.processed_dir / project.id, settings.processed_dir)
-    paths = [upload_path, processed_path]
+    paths = [processed_path]
+    if project.stored_file_path:
+        paths.insert(0, _managed_path(Path(project.stored_file_path), settings.upload_dir))
     for render in project.renders:
         if not render.output_file_path:
             continue
@@ -91,6 +95,18 @@ def cleanup_project(db: Session, project: Project, settings: Settings | None = N
     )
     if active_render is not None:
         raise ProjectCleanupError("현재 쇼츠 영상 생성이 진행 중입니다. 완료 또는 실패 후 다시 시도해 주세요.")
+
+    r2_deleted = 0
+    if cleanup_settings.uses_r2:
+        previous_status = project.status
+        project.status = "deleting"
+        db.commit()
+        try:
+            r2_deleted = get_storage_service(cleanup_settings).delete_project_objects(project.id)
+        except StorageError as exc:
+            project.status = previous_status
+            db.commit()
+            raise ProjectCleanupError("R2 프로젝트 파일을 정리하지 못했습니다. 다시 시도해 주세요.") from exc
 
     targets = collect_project_paths(project, cleanup_settings)
     staging_root = _managed_path(
@@ -125,7 +141,7 @@ def cleanup_project(db: Session, project: Project, settings: Settings | None = N
         shutil.rmtree(staging_root, ignore_errors=True)
         raise
 
-    deleted_files = sum(item.file_count for item in staged)
+    deleted_files = sum(item.file_count for item in staged) + r2_deleted
     freed_bytes = sum(item.byte_count for item in staged)
     shutil.rmtree(staging_root, ignore_errors=True)
     cleanup_parent = staging_root.parent

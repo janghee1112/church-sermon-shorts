@@ -1,4 +1,5 @@
 export type ProjectStatus =
+  | "uploading"
   | "uploaded"
   | "extracting_audio"
   | "transcribing"

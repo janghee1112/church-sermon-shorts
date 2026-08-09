@@ -1,8 +1,8 @@
 from pathlib import Path
 from typing import Optional, Tuple
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, status
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Response, status
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -19,6 +19,7 @@ from app.services.render_service import (
     run_render_job,
     serialize_render,
 )
+from app.services.storage_service import StorageError, get_storage_service
 
 
 router = APIRouter(tags=["renders"])
@@ -77,16 +78,32 @@ def _completed_file(render_id: int, db: Session) -> Tuple[RenderJob, Path]:
     return job, path
 
 
+def _completed_job(render_id: int, db: Session) -> RenderJob:
+    job = get_render(db, render_id)
+    if job.status != "completed" or not (job.output_object_key or job.output_file_path):
+        raise HTTPException(status_code=409, detail="아직 완성되지 않은 영상입니다.")
+    return job
+
+
 @router.get("/api/renders/{render_id}/video")
 def stream_render_video(
     render_id: int,
     range_header: Optional[str] = Header(default=None, alias="Range"),
     db: Session = Depends(get_db),
-) -> StreamingResponse:
+) -> Response:
     try:
-        _, path = _completed_file(render_id, db)
+        job = _completed_job(render_id, db)
     except RenderError as exc:
         raise _http_error(exc) from exc
+    if job.output_object_key:
+        try:
+            url = get_storage_service().generate_download_url(
+                job.output_object_key, get_settings().r2_read_url_expiry_seconds
+            )
+        except StorageError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return RedirectResponse(url=url, status_code=status.HTTP_307_TEMPORARY_REDIRECT, headers={"Cache-Control": "private, no-store"})
+    _, path = _completed_file(render_id, db)
     file_size = path.stat().st_size
     try:
         byte_range = parse_range_header(range_header, file_size)
@@ -112,11 +129,22 @@ def stream_render_video(
 
 
 @router.get("/api/renders/{render_id}/download")
-def download_render(render_id: int, db: Session = Depends(get_db)) -> FileResponse:
+def download_render(render_id: int, db: Session = Depends(get_db)) -> Response:
     try:
-        job, path = _completed_file(render_id, db)
+        job = _completed_job(render_id, db)
     except RenderError as exc:
         raise _http_error(exc) from exc
+    if job.output_object_key:
+        try:
+            url = get_storage_service().generate_download_url(
+                job.output_object_key,
+                get_settings().r2_read_url_expiry_seconds,
+                download_name_for_job(job),
+            )
+        except StorageError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return RedirectResponse(url=url, status_code=status.HTTP_307_TEMPORARY_REDIRECT, headers={"Cache-Control": "private, no-store"})
+    _, path = _completed_file(render_id, db)
     return FileResponse(
         path, media_type="video/mp4", filename=download_name_for_job(job),
         headers={"Cache-Control": "private, no-store"},

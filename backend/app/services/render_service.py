@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -27,6 +29,7 @@ from app.services.title_renderer import (
     render_title_png,
 )
 from app.services.title_highlight import legacy_highlight_range, load_highlight_ranges
+from app.services.storage_service import StorageError, get_storage_service, project_render_key
 
 
 logger = logging.getLogger(__name__)
@@ -69,9 +72,17 @@ def _source_path(draft: ClipDraft) -> Path:
 
 
 def _verify_render_dependencies(draft: ClipDraft, settings: Settings) -> None:
-    source = _source_path(draft)
-    if not source.is_file():
-        raise RenderError("원본 영상 파일을 찾을 수 없습니다.", "source_missing")
+    if settings.uses_r2 and draft.project.original_object_key:
+        try:
+            metadata = get_storage_service(settings).get_object_metadata(draft.project.original_object_key)
+        except StorageError as exc:
+            raise RenderError("원본 영상 파일을 R2에서 확인하지 못했습니다.", "source_missing") from exc
+        if metadata.size <= 0:
+            raise RenderError("원본 영상 파일을 찾을 수 없습니다.", "source_missing")
+    else:
+        source = _source_path(draft)
+        if not source.is_file():
+            raise RenderError("원본 영상 파일을 찾을 수 없습니다.", "source_missing")
     if draft.start_sec < 0 or draft.end_sec <= draft.start_sec or draft.end_sec > draft.project.duration_seconds + 0.05:
         raise RenderError("선택한 영상 구간이 올바르지 않습니다.", "invalid_range")
     if not draft.subtitles:
@@ -144,7 +155,9 @@ def _build_snapshot(draft: ClipDraft, settings: Settings) -> dict[str, Any]:
         ],
         "source": {
             "project_id": draft.project_id,
-            "stored_file_path": str(_source_path(draft)),
+            "storage_backend": "r2" if settings.uses_r2 and draft.project.original_object_key else "local",
+            "stored_file_path": str(_source_path(draft)) if draft.project.stored_file_path else "",
+            "object_key": draft.project.original_object_key,
             "original_file_name": draft.project.original_file_name,
             "width": draft.project.width,
             "height": draft.project.height,
@@ -220,7 +233,7 @@ def create_render_job(db: Session, draft_id: int, settings: Optional[Settings] =
 
 
 def serialize_render(job: RenderJob) -> dict[str, Any]:
-    completed = job.status == "completed" and bool(job.output_file_path)
+    completed = job.status == "completed" and bool(job.output_file_path or job.output_object_key)
     return {
         "id": job.id,
         "project_id": job.project_id,
@@ -309,22 +322,36 @@ def process_render_job(db: Session, render_id: int) -> None:
         snapshot = json.loads(job.settings_snapshot)
         job.started_at = _utc_now()
         _set_state(db, job, "preparing", 5, "validating")
-        source_path = Path(snapshot["source"]["stored_file_path"])
+        settings = get_settings()
+        source_backend = str(snapshot["source"].get("storage_backend", "local"))
+        if source_backend == "r2":
+            object_key = str(snapshot["source"].get("object_key") or "")
+            if not object_key:
+                raise RenderError("원본 영상 파일을 찾을 수 없습니다.", "source_missing")
+            try:
+                source_path: Path | str = get_storage_service(settings).generate_download_url(
+                    object_key, settings.r2_read_url_expiry_seconds
+                )
+            except StorageError as exc:
+                raise RenderError("원본 영상을 R2에서 불러오지 못했습니다.", "source_missing") from exc
+        else:
+            source_path = Path(snapshot["source"]["stored_file_path"])
         title_font = Path(snapshot["fonts"]["title_path"])
         subtitle_font = Path(snapshot["fonts"]["subtitle_path"])
         banner_path = Path(snapshot["banner"]["asset_path"])
-        for path, message, code in (
-            (source_path, "원본 영상 파일을 찾을 수 없습니다.", "source_missing"),
+        paths_to_verify = [
             (title_font, "렌더링에 사용할 제목 글꼴을 찾을 수 없습니다.", "title_font_missing"),
             (subtitle_font, "렌더링에 사용할 자막 글꼴을 찾을 수 없습니다.", "subtitle_font_missing"),
             (banner_path, "교회 배너 이미지 파일을 찾을 수 없습니다.", "banner_asset_invalid"),
-        ):
+        ]
+        if source_backend != "r2":
+            paths_to_verify.insert(0, (Path(source_path), "원본 영상 파일을 찾을 수 없습니다.", "source_missing"))
+        for path, message, code in paths_to_verify:
             if not path.is_file():
                 raise RenderError(message, code)
 
         step = "preparing_assets"
         _set_state(db, job, "preparing", 10, step)
-        settings = get_settings()
         work_dir = settings.processed_dir / job.project_id / "renders" / str(job.id)
         work_dir.mkdir(parents=True, exist_ok=True)
         title_path = work_dir / "title.png"
@@ -427,7 +454,26 @@ def process_render_job(db: Session, render_id: int) -> None:
         step = "finalizing"
         _set_state(db, job, "rendering", 96, step)
         metadata = validate_rendered_file(temporary_output, output_duration, width, height)
-        os.replace(temporary_output, final_output)
+        if settings.uses_r2:
+            output_object_key = project_render_key(job.project_id, job.version, output_name)
+            try:
+                stored_metadata = get_storage_service(settings).upload_file(
+                    temporary_output, output_object_key, "video/mp4"
+                )
+            except StorageError as exc:
+                raise RenderError("완성 영상을 R2에 저장하지 못했습니다.", "r2_upload_failed") from exc
+            if stored_metadata.size != metadata["size"]:
+                try:
+                    get_storage_service(settings).delete_object(output_object_key)
+                except StorageError:
+                    pass
+                raise RenderError("R2에 저장된 완성 영상 검증에 실패했습니다.", "r2_verify_failed")
+            temporary_output.unlink(missing_ok=True)
+            job.output_object_key = output_object_key
+            job.output_file_path = None
+        else:
+            os.replace(temporary_output, final_output)
+            job.output_file_path = str(final_output)
         title_path.unlink(missing_ok=True)
         overlay_manifest_path.unlink(missing_ok=True)
         for overlay_asset in overlay_assets:
@@ -436,7 +482,6 @@ def process_render_job(db: Session, render_id: int) -> None:
         job.status = "completed"
         job.progress = 100
         job.current_step = "finalizing"
-        job.output_file_path = str(final_output)
         job.output_file_name = output_name
         job.output_file_size = metadata["size"]
         job.output_duration_sec = metadata["duration"]

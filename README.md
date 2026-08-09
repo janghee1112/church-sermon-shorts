@@ -13,7 +13,8 @@ MP4 설교 영상을 업로드하면 음성을 추출하고 한국어 대본과 
 - 후보 범위를 AI의 자유 시간값이 아닌 실제 DB `segment_id`로 확정
 - 실제 모드에서 오디오 길이·전사 내용·DB 재조회 검증 후에만 후보 분석
 - 문장 경계 보정, 30~75초 제한, 영상 범위/후보 겹침 검사
-- HTTP Range 원본 영상 스트리밍
+- 로컬 파일 또는 private Cloudflare R2 기반 원본 영상 재생
+- 브라우저에서 R2로 직접 보내는 대용량 multipart 업로드와 실제 바이트 진행률
 - SQLite 상태 저장과 새로고침 복원
 - 분석 진행률, 안전한 오류 메시지와 재시도
 - 프로젝트 삭제 API와 관련 파일/DB 정리
@@ -25,7 +26,7 @@ MP4 설교 영상을 업로드하면 음성을 추출하고 한국어 대본과 
 - 저장 시점 스냅샷 기반 1080×1920 H.264/AAC 쇼츠 렌더링
 - 실제 렌더링 진행률, 최근 버전 목록, 완성 MP4 Range 재생과 다운로드
 
-인증, 결제, 클라우드 저장소와 분산 작업 큐는 포함하지 않습니다. 인물 분리, 사람 마스크와 segmentation 모델은 사용하지 않습니다.
+인증, 결제와 분산 작업 큐는 포함하지 않습니다. 인물 분리, 사람 마스크와 segmentation 모델은 사용하지 않습니다.
 
 ## 기술 스택
 
@@ -102,6 +103,11 @@ cp frontend/.env.example frontend/.env.local
 | `RENDER_CRF`, `RENDER_PRESET` | H.264 품질과 속도 | `20`, `medium` |
 | `TITLE_FONT_PATH` | 제목용 Pretendard Black 파일 | `./backend/assets/fonts/Pretendard-Black.otf` |
 | `SUBTITLE_FONT_PATH` | 자막용 한글 명조 파일 | `./backend/assets/fonts/NanumMyeongjo-Regular.ttf` |
+| `STORAGE_BACKEND` | 로컬은 `local`, 운영 R2는 `r2` | `local` |
+| `R2_ACCOUNT_ID` | Cloudflare 계정 ID | 빈 값 |
+| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | 서버 전용 R2 S3 API 자격 증명 | 빈 값 |
+| `R2_BUCKET_NAME` | private R2 bucket 이름 | `sermon-shorts` |
+| `R2_ENDPOINT_URL` | 명시적 S3 endpoint, 비우면 Account ID로 계산 | 빈 값 |
 
 비밀 키는 프론트엔드 환경 변수에 넣지 마세요. `.env`는 Git에서 제외되어 있습니다.
 
@@ -195,6 +201,42 @@ docker compose up --build
 
 로컬 개발은 위의 개별 실행 방식을 권장합니다. Docker에서는 SQLite 데이터가 `app-data` 이름의 볼륨에 유지됩니다.
 
+## Cloudflare R2 미디어 저장
+
+운영에서는 `STORAGE_BACKEND=r2`를 사용합니다. 원본 MP4는 브라우저에서 private R2 bucket으로 직접 multipart 업로드되고, SQLite에는 `original_object_key`만 저장됩니다. FFmpeg는 presigned HTTPS URL을 입력으로 사용합니다. 완성 쇼츠는 로컬 임시 MP4로 검증한 직후 R2에 올리고 임시 파일을 삭제합니다. Presigned URL과 R2 비밀키는 DB나 프론트엔드 번들에 저장되지 않습니다.
+
+Cloudflare Dashboard에서 private bucket과 Object Read & Write API token을 만든 뒤 Railway Variables에 다음 값을 직접 등록합니다.
+
+```dotenv
+STORAGE_BACKEND=r2
+R2_ACCOUNT_ID=your_account_id
+R2_ACCESS_KEY_ID=your_access_key_id
+R2_SECRET_ACCESS_KEY=your_secret_access_key
+R2_BUCKET_NAME=sermon-shorts
+R2_ENDPOINT_URL=https://your_account_id.r2.cloudflarestorage.com
+R2_REGION=auto
+R2_MULTIPART_PART_SIZE_MB=25
+R2_UPLOAD_URL_EXPIRY_SECONDS=14400
+R2_READ_URL_EXPIRY_SECONDS=14400
+```
+
+R2 자격 증명을 로컬 셸 환경에 설정한 뒤 CORS와 미완료 multipart 1일 정리 정책을 적용합니다. `*` origin은 거부됩니다.
+
+```bash
+cd backend
+export R2_CORS_ORIGINS=http://localhost:3000,https://church-sermon-shorts-production.up.railway.app
+PYTHONPATH=. .venv/bin/python scripts/configure_r2.py
+```
+
+기존 로컬 미디어가 있다면 다음 명령으로 먼저 R2에 복사할 수 있습니다. 이 명령은 크기를 검증하고 DB object key를 연결하지만 기존 로컬 파일은 삭제하지 않습니다.
+
+```bash
+cd backend
+PYTHONPATH=. .venv/bin/python scripts/migrate_media_to_r2.py
+```
+
+R2 bucket CORS는 운영 Railway origin과 로컬 개발 origin에만 `GET`, `HEAD`, `PUT`을 허용하고 `ETag`을 노출해야 합니다. `ETag`이 노출되지 않으면 브라우저가 multipart 완료 목록을 만들 수 없습니다.
+
 ## Railway 단일 Web Service 배포
 
 현재 운영 주소는 [https://church-sermon-shorts-production.up.railway.app](https://church-sermon-shorts-production.up.railway.app)입니다. 루트 `Dockerfile`로 Next.js와 FastAPI를 한 컨테이너에서 실행하며, Railway가 주입한 `PORT`를 FastAPI가 사용하고 Next.js는 내부 `127.0.0.1:3000`에서 동작합니다.
@@ -207,8 +249,9 @@ docker compose up --build
 - Persistent Volume mount path: `/var/data`
 - `DATA_DIR=/var/data`
 - `DATABASE_URL=sqlite:////var/data/sermon_shorts.db`
-- `UPLOAD_DIR=/var/data/uploads`
-- `PROCESSED_DIR=/var/data/processed`
+- `UPLOAD_DIR=/var/data/uploads`는 레거시 local 호환에만 사용
+- `PROCESSED_DIR=/var/data/processed`는 압축 전사 조각과 렌더 임시 파일에만 사용
+- `STORAGE_BACKEND=r2`와 서버 전용 R2 환경변수 설정
 - 같은 origin을 사용하므로 `CORS_ORIGINS`는 빈 값
 - 실제 분석은 `USE_MOCK_AI=false`; OpenAI 키와 모델명은 Railway Variables에만 저장
 
@@ -220,7 +263,7 @@ git commit -m "변경 내용"
 git push origin main
 ```
 
-push가 끝나면 Railway가 자동으로 새 이미지를 빌드하고 `/health` 검증을 통과한 뒤 교체합니다. SQLite, 업로드 원본, 추출 파일과 완성 MP4는 `/var/data` Volume에 남으므로 정상 재배포에서는 유지됩니다.
+push가 끝나면 Railway가 자동으로 새 이미지를 빌드하고 `/health` 검증을 통과한 뒤 교체합니다. SQLite는 `/var/data` Volume에 유지되고, 신규 원본과 완성 MP4는 private R2에 유지됩니다.
 
 ## Render 단일 Web Service 배포
 
@@ -244,11 +287,15 @@ Render Persistent Disk는 유료 Web Service에서만 연결할 수 있습니다
 ## API
 
 - `POST /api/projects` — 업로드, 검증, 메타데이터 저장
+- `GET /api/uploads/config` — local/R2 업로드 모드 조회
+- `POST /api/uploads/multipart/init` — 서버가 정한 object key로 R2 multipart 시작 및 part URL 발급
+- `POST /api/uploads/multipart/complete` — ETag 목록 완료, R2 HEAD·FFprobe 검증 후 프로젝트 확정
+- `POST /api/uploads/multipart/abort` — 실패한 multipart 업로드 취소
 - `POST /api/projects/{id}/analyze` — 중복 방지 백그라운드 분석 시작
 - `GET /api/projects/{id}` — 상태/진행률/오류 조회
 - `GET /api/projects/{id}/transcript` — 전체 대본과 세그먼트/단어 시간
 - `GET /api/projects/{id}/candidates` — 요약과 최종 후보 4개
-- `GET /api/projects/{id}/video` — HTTP Range MP4 스트리밍
+- `GET /api/projects/{id}/video` — local Range 스트리밍 또는 짧은 R2 GET URL redirect
 - `DELETE /api/projects/{id}` — DB/원본/처리 파일 삭제
 - `POST /api/projects/{id}/drafts` — 후보와 선택한 추천 제목 순번을 기반으로 편집 초안 생성 또는 기존 초안 반환
 - `GET /api/drafts/{id}` — 초안·후보·선택 범위·자막 조회
@@ -263,12 +310,12 @@ Render Persistent Disk는 유료 Web Service에서만 연결할 수 있습니다
 - `POST /api/drafts/{id}/renders` — 저장 설정 snapshot과 새 버전을 만들고 백그라운드 렌더 시작
 - `GET /api/renders/{id}` — 렌더 상태·진행률·오류·출력 정보 조회
 - `GET /api/drafts/{id}/renders` — 최신 순 렌더 버전 목록
-- `GET /api/renders/{id}/video` — 완성 MP4 HTTP Range 스트리밍
-- `GET /api/renders/{id}/download` — 안전한 한글 파일명으로 완성 MP4 다운로드
+- `GET /api/renders/{id}/video` — local Range 스트리밍 또는 짧은 R2 GET URL redirect
+- `GET /api/renders/{id}/download` — R2에서 직접 내려받는 안전한 한글 파일명 URL
 
 ## 편집 데이터베이스 변경
 
-서버 시작 시 SQLAlchemy `Base.metadata.create_all()`과 멱등 SQLite 마이그레이션이 기존 테이블과 데이터를 유지합니다. 신규 `render_jobs` 테이블은 초안별 버전, 상태, 진행률, 출력 메타데이터와 JSON `settings_snapshot`을 저장합니다. 기존 제목·자막·crop 값과 과거 DB 컬럼은 삭제하지 않습니다. 레거시 인물 분리 컬럼은 마이그레이션 호환 때문에 DB에만 남지만 API·미리보기·렌더링에서는 읽거나 사용하지 않습니다. 같은 후보에는 하나의 초안만 생성되고 편집 자막 시간은 원본 영상 기준 절대 시간으로 저장됩니다.
+서버 시작 시 SQLAlchemy `Base.metadata.create_all()`과 멱등 SQLite 마이그레이션이 기존 테이블과 데이터를 유지합니다. `projects.original_object_key`, `render_jobs.output_object_key`와 `multipart_upload_sessions`가 추가됩니다. 기존 로컬 경로 필드는 local 개발과 레거시 데이터 호환을 위해 남습니다. 기존 제목·자막·crop 값과 과거 DB 컬럼은 삭제하지 않습니다. 레거시 인물 분리 컬럼은 마이그레이션 호환 때문에 DB에만 남지만 API·미리보기·렌더링에서는 읽거나 사용하지 않습니다.
 
 `template_type=sermon_letterbox_v1`은 `frontend/lib/sermonTemplate.ts`의 검은 캔버스 영역 규칙과 `pretendard_black_v1`, `korean_myeongjo_v1` 글꼴 키를 가리킵니다. 현재 단계에는 영상 영역 높이와 글꼴 종류를 직접 바꾸는 UI가 없습니다.
 
@@ -277,7 +324,8 @@ Render Persistent Disk는 유료 Web Service에서만 연결할 수 있습니다
 - FastAPI 프로세스 내부 백그라운드 작업을 사용하므로 다중 서버/분산 처리를 지원하지 않습니다.
 - 서버가 분석 또는 렌더링 도중 재시작되면 해당 작업을 `failed`로 복구하고 사용자가 재시도해야 합니다.
 - OpenAI 계정/모델별 파일 크기와 출력 형식 지원 차이에 따라 전사 모델 설정을 조정해야 할 수 있습니다.
-- SQLite와 로컬 디스크는 단일 서버 MVP 용도입니다.
+- SQLite는 단일 서버 MVP 용도이며 Railway Volume에 계속 의존합니다.
+- R2 presigned URL은 기본 4시간이며 매우 긴 분석이나 열린 편집 탭에서는 페이지를 새로 열어 새 URL을 발급받아야 할 수 있습니다.
 - 아주 짧은 영상, 문장 경계가 드문 대본, 후보 소재가 부족한 설교에서는 엄격한 4개/30초 기준을 만족하지 못할 수 있습니다.
 - OpenAI 모델의 응답 형식이나 사용 한도 변경 시 실제 모드 분석이 실패할 수 있으므로 Railway 로그와 사용자 오류 메시지를 함께 확인해야 합니다.
 - 브라우저 성능에 따라 Canvas 미리보기 프레임률이 원본보다 낮을 수 있습니다.
@@ -288,7 +336,7 @@ Render Persistent Disk는 유료 Web Service에서만 연결할 수 있습니다
 ## 다음 개발 단계
 
 1. Redis/Celery 또는 관리형 작업 큐, 렌더 취소와 작업 재개
-2. PostgreSQL 및 S3 호환 오브젝트 스토리지
+2. PostgreSQL 전환과 사용자별 R2 object 권한
 3. 전사 청크 경계의 의미 기반 중복 제거 강화
 4. 사용자 어휘/교회 설정
 5. 렌더 품질 프리셋과 썸네일 선택

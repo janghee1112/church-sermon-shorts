@@ -3,7 +3,10 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
+from typing import List, Union
+
+
+MediaInput = Union[Path, str]
 
 
 class VideoProcessingError(Exception):
@@ -41,7 +44,7 @@ class VideoService:
         if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
             raise VideoProcessingError("FFmpeg가 설치되어 있지 않습니다. README의 설치 안내를 확인해 주세요.")
 
-    def probe(self, path: Path) -> VideoMetadata:
+    def probe(self, path: MediaInput) -> VideoMetadata:
         self.ensure_tools()
         command = [
             "ffprobe", "-v", "error", "-print_format", "json",
@@ -70,14 +73,14 @@ class VideoService:
             has_audio=audio_stream is not None,
         )
 
-    def extract_audio(self, video_path: Path, project_id: str) -> Path:
+    def extract_audio(self, video_path: MediaInput, project_id: str) -> Path:
         self.ensure_tools()
         project_dir = self.processed_dir / project_id
         project_dir.mkdir(parents=True, exist_ok=True)
-        output = project_dir / "audio.wav"
+        output = project_dir / "audio.mp3"
         command = [
             "ffmpeg", "-nostdin", "-y", "-v", "error", "-i", str(video_path),
-            "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(output),
+            "-vn", "-ac", "1", "-ar", "16000", "-c:a", "libmp3lame", "-b:a", "64k", str(output),
         ]
         try:
             subprocess.run(command, capture_output=True, text=True, timeout=7200, check=True)

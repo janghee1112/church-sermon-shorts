@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Union
 
 from app.services.render_crop import RenderCrop
 
@@ -6,7 +7,7 @@ from app.services.render_crop import RenderCrop
 def build_ffmpeg_command(
     *,
     ffmpeg_binary: str,
-    source_path: Path,
+    source_path: Union[Path, str],
     overlay_manifest_path: Path,
     temporary_output: Path,
     start_sec: float,

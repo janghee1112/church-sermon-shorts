@@ -6,11 +6,12 @@ import { formatBytes } from "@/lib/time";
 interface Props {
   busy: boolean;
   progress: number;
+  verifying?: boolean;
   error: string | null;
   onSubmit: (file: File) => void;
 }
 
-export function UploadPanel({ busy, progress, error, onSubmit }: Props) {
+export function UploadPanel({ busy, progress, verifying = false, error, onSubmit }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -76,7 +77,7 @@ export function UploadPanel({ busy, progress, error, onSubmit }: Props) {
             onClick={() => file && onSubmit(file)}
             className="focus-ring mt-5 w-full rounded-2xl bg-moss px-5 py-4 font-bold text-white shadow-lg shadow-moss/15 transition hover:bg-[#244b3a] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {busy ? `업로드 중 ${progress}%` : "업로드하고 분석 시작"}
+            {busy ? (verifying ? "업로드 확인 중…" : `업로드 중 ${progress}%`) : "업로드하고 분석 시작"}
           </button>
           <p className="mt-4 text-center text-xs text-ink/45">MP4 · 최대 2GB · 최대 90분</p>
         </div>
@@ -84,4 +85,3 @@ export function UploadPanel({ busy, progress, error, onSubmit }: Props) {
     </main>
   );
 }
-

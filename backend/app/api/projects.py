@@ -7,7 +7,7 @@ from typing import Iterator, Optional
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, Request, Response, UploadFile, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -18,6 +18,7 @@ from app.schemas.api import CandidatesResponse, ProjectResponse, TranscriptRespo
 from app.services.project_cleanup_service import ProjectCleanupError, cleanup_project
 from app.services.project_service import analyze_project, project_to_dict
 from app.services.video_service import VideoProcessingError, VideoService
+from app.services.storage_service import StorageError, get_storage_service
 
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -38,6 +39,9 @@ def get_project_or_404(project_id: str, db: Session) -> Project:
 
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 async def create_project(file: UploadFile = File(...), db: Session = Depends(get_db)) -> dict:
+    if settings.uses_r2:
+        await file.close()
+        raise HTTPException(status_code=409, detail="대용량 영상은 R2 직접 업로드를 사용해 주세요.")
     if not file.filename:
         raise HTTPException(status_code=400, detail="업로드할 파일을 선택해 주세요.")
     extension = Path(file.filename).suffix.lower()
@@ -103,6 +107,8 @@ def start_analysis(project_id: str, background_tasks: BackgroundTasks, db: Sessi
         return project_to_dict(project)
     if project.status == "completed":
         return project_to_dict(project)
+    if project.status == "uploading":
+        raise HTTPException(status_code=409, detail="영상 업로드 확인이 아직 완료되지 않았습니다.")
     project.status = "extracting_audio"
     project.progress = 10
     project.error_message = None
@@ -231,6 +237,14 @@ def _file_iterator(path: Path, start: int, end: int, chunk_size: int = 1024 * 10
 @router.get("/{project_id}/video")
 def stream_video(project_id: str, range_header: Optional[str] = Header(None, alias="Range"), db: Session = Depends(get_db)) -> Response:
     project = get_project_or_404(project_id, db)
+    if settings.uses_r2 and project.original_object_key:
+        try:
+            url = get_storage_service(settings).generate_download_url(
+                project.original_object_key, settings.r2_read_url_expiry_seconds
+            )
+        except StorageError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return RedirectResponse(url=url, status_code=status.HTTP_307_TEMPORARY_REDIRECT, headers={"Cache-Control": "private, no-store"})
     path = Path(project.stored_file_path)
     if not path.exists():
         raise HTTPException(status_code=404, detail="원본 영상 파일을 찾을 수 없습니다.")

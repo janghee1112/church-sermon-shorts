@@ -46,6 +46,8 @@ def _add_mvp_columns(target_engine: Engine = engine) -> None:
     title_ranges_added = False
     additions = {
         "projects": {
+            "original_object_key": "VARCHAR(1000)",
+            "original_content_type": "VARCHAR(120) NOT NULL DEFAULT 'video/mp4'",
             "analysis_mode": "VARCHAR(16) NOT NULL DEFAULT 'mock'",
             "transcription_model": "VARCHAR(120)",
             "transcript_segment_count": "INTEGER NOT NULL DEFAULT 0",
@@ -74,6 +76,9 @@ def _add_mvp_columns(target_engine: Engine = engine) -> None:
             "subject_mask_feather": "FLOAT NOT NULL DEFAULT 0.12",
             "subject_mask_threshold": "FLOAT NOT NULL DEFAULT 0.5",
             "template_type": "VARCHAR(40) NOT NULL DEFAULT 'sermon_letterbox_v1'",
+        },
+        "render_jobs": {
+            "output_object_key": "VARCHAR(1000)",
         },
     }
     inspector = inspect(target_engine)

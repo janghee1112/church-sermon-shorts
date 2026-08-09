@@ -21,6 +21,7 @@ from app.services.render_service import (
 )
 from app.services.subtitle_renderer import build_relative_cues, render_subtitle_timeline
 from app.services.title_renderer import TITLE_LETTER_SPACING_EM, calculate_title_layout, render_title_png
+from app.services.storage_service import StorageObjectMetadata
 
 
 def seed_renderable_draft(db_session, sample_video: Path, title: str = "믿음으로\n걸어갑시다") -> ClipDraft:
@@ -175,6 +176,47 @@ def test_new_draft_defaults_render_an_actual_mp4(db_session, sample_video):
     assert job.output_width == 1080
     assert job.output_height == 1920
     assert job.output_duration_sec == pytest.approx(1.0, abs=0.1)
+
+
+def test_r2_render_reads_remote_source_uploads_verified_output_and_removes_local_mp4(
+    db_session, sample_video, monkeypatch
+):
+    class FakeRenderStorage:
+        def __init__(self):
+            self.uploaded = []
+
+        def get_object_metadata(self, object_key):
+            return StorageObjectMetadata(sample_video.stat().st_size, "video/mp4", "source-etag")
+
+        def generate_download_url(self, object_key, expires_in, download_name=None):
+            return str(sample_video)
+
+        def upload_file(self, source, object_key, content_type):
+            self.uploaded.append((Path(source), object_key, content_type, Path(source).stat().st_size))
+            return StorageObjectMetadata(Path(source).stat().st_size, content_type, "output-etag")
+
+        def delete_object(self, object_key):
+            raise AssertionError("verified output must not be deleted")
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "storage_backend", "r2")
+    storage = FakeRenderStorage()
+    monkeypatch.setattr("app.services.render_service.get_storage_service", lambda *_: storage)
+    draft = seed_renderable_draft(db_session, sample_video)
+    draft.project.original_object_key = f"projects/{draft.project_id}/original/source.mp4"
+    db_session.commit()
+    job, _ = create_render_job(db_session, draft.id)
+    assert json.loads(job.settings_snapshot)["source"]["storage_backend"] == "r2"
+    process_render_job(db_session, job.id)
+    db_session.refresh(job)
+    assert job.status == "completed", job.error_message
+    assert job.output_file_path is None
+    assert job.output_object_key and job.output_object_key.startswith(
+        f"projects/{draft.project_id}/renders/v1/"
+    )
+    assert len(storage.uploaded) == 1
+    assert storage.uploaded[0][2] == "video/mp4"
+    assert not storage.uploaded[0][0].exists()
 
 
 def test_ffmpeg_command_does_not_apply_video_darkness(tmp_path):

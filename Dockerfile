@@ -31,6 +31,7 @@ RUN python3 -m venv /opt/venv \
 
 COPY backend/app ./backend/app
 COPY backend/assets ./backend/assets
+COPY backend/scripts ./backend/scripts
 COPY --from=frontend-build /app/frontend/.next ./frontend/.next
 COPY --from=frontend-build /app/frontend/node_modules ./frontend/node_modules
 COPY --from=frontend-build /app/frontend/public ./frontend/public
