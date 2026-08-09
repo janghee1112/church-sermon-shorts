@@ -67,18 +67,18 @@ def test_create_is_idempotent_and_uses_candidate_boundaries(client, db_session):
     generated_words = " ".join(item["original_text"] for item in payload["subtitles"]).split()
     source_words = " ".join(item.text for item in segments[1:7]).split()
     assert generated_words == source_words
-    assert payload["zoom_scale"] == 1.12
+    assert payload["zoom_scale"] == 1.30
     assert payload["crop_position_x"] == 0.5
-    assert payload["crop_position_y"] == 0.5
-    assert payload["video_area_position_y"] == 0.30
+    assert payload["crop_position_y"] == 0.42
+    assert payload["video_area_position_y"] == 0.28
     assert payload["video_area_height"] == 0.48
     assert payload["title_highlight_text"] == ""
     assert payload["title_highlight_ranges"] == []
-    assert payload["title_font_scale"] == 1.0
+    assert payload["title_font_scale"] == 1.20
     assert payload["title_position_y"] == 0.08
     assert payload["subtitle_font_scale"] == 1.0
-    assert payload["subtitle_position_y"] == 0.21
-    assert payload["playback_rate"] == 1.0
+    assert payload["subtitle_position_y"] == 0.24
+    assert payload["playback_rate"] == 1.20
     assert "background_darkness" not in payload
     assert "subject_brightness" not in payload
     assert "subject_mask_enabled" not in payload
@@ -149,6 +149,29 @@ def test_existing_draft_keeps_explicit_layout_positions(client, db_session):
     assert {key: loaded[key] for key in explicit} == explicit
 
 
+def test_video_area_position_accepts_new_bounds_and_preserves_legacy_explicit_value(client, db_session):
+    project, candidate, _ = seed_draft_source(db_session)
+    draft_id = create_draft(client, project, candidate).json()["id"]
+    for value in (0.22, 0.28, 0.34):
+        response = client.patch(f"/api/drafts/{draft_id}", json={"video_area_position_y": value})
+        assert response.status_code == 200
+        assert response.json()["video_area_position_y"] == value
+    for value in (0.219, 0.341):
+        assert client.patch(f"/api/drafts/{draft_id}", json={"video_area_position_y": value}).status_code == 422
+
+    draft = db_session.get(ClipDraft, draft_id)
+    draft.video_area_position_y = 0.38
+    db_session.commit()
+    assert client.get(f"/api/drafts/{draft_id}").json()["video_area_position_y"] == 0.38
+    unchanged = client.patch(
+        f"/api/drafts/{draft_id}",
+        json={"custom_title": "기존 위치 보존", "video_area_position_y": 0.38},
+    )
+    assert unchanged.status_code == 200
+    assert unchanged.json()["video_area_position_y"] == 0.38
+    assert client.patch(f"/api/drafts/{draft_id}", json={"video_area_position_y": 0.37}).status_code == 422
+
+
 def test_title_sanitization_and_crop_validation(client, db_session):
     project, candidate, _ = seed_draft_source(db_session)
     draft_id = create_draft(client, project, candidate).json()["id"]
@@ -167,7 +190,7 @@ def test_visual_settings_save_validate_and_persist(client, db_session):
         "zoom_scale": 1.32,
         "crop_position_x": 0.42,
         "crop_position_y": 0.64,
-        "video_area_position_y": 0.38,
+        "video_area_position_y": 0.34,
         "video_area_height": 0.5,
         "title_font_scale": 1.2,
         "title_position_y": 0.14,
@@ -185,7 +208,7 @@ def test_visual_settings_save_validate_and_persist(client, db_session):
         "zoom_scale": 1.41,
         "crop_position_x": -0.01,
         "crop_position_y": 1.01,
-        "video_area_position_y": 0.27,
+        "video_area_position_y": 0.219,
         "video_area_height": 0.59,
         "title_font_scale": 0.69,
         "title_position_y": 0.29,

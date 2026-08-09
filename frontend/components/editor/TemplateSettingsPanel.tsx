@@ -7,23 +7,23 @@ import { TitleHighlightEditor } from "./TitleHighlightEditor";
 
 export const DEFAULT_TEMPLATE_SETTINGS: Omit<DraftVisualSettings, "custom_title"> = {
   title_highlight_ranges: [],
-  zoom_scale: 1.12,
-  crop_position_x: 0.5,
-  crop_position_y: 0.5,
+  zoom_scale: SERMON_LETTERBOX_TEMPLATE.defaultZoomScale,
+  crop_position_x: SERMON_LETTERBOX_TEMPLATE.defaultCropPositionX,
+  crop_position_y: SERMON_LETTERBOX_TEMPLATE.defaultCropPositionY,
   video_area_position_y: SERMON_LETTERBOX_TEMPLATE.defaultVideoAreaPositionY,
   video_area_height: 0.48,
-  title_font_scale: 1,
+  title_font_scale: SERMON_LETTERBOX_TEMPLATE.defaultTitleFontScale,
   title_position_y: SERMON_LETTERBOX_TEMPLATE.defaultTitlePositionY,
-  subtitle_font_scale: 1,
+  subtitle_font_scale: SERMON_LETTERBOX_TEMPLATE.defaultSubtitleFontScale,
   subtitle_position_y: SERMON_LETTERBOX_TEMPLATE.defaultSubtitlePositionY,
-  playback_rate: 1,
+  playback_rate: SERMON_LETTERBOX_TEMPLATE.defaultPlaybackRate,
   template_type: "sermon_letterbox_v1",
 };
 
 export const LETTERBOX_COMPOSITION_RESET = {
-  zoom_scale: 1,
-  crop_position_x: 0.5,
-  crop_position_y: 0.5,
+  zoom_scale: SERMON_LETTERBOX_TEMPLATE.defaultZoomScale,
+  crop_position_x: SERMON_LETTERBOX_TEMPLATE.defaultCropPositionX,
+  crop_position_y: SERMON_LETTERBOX_TEMPLATE.defaultCropPositionY,
   video_area_position_y: SERMON_LETTERBOX_TEMPLATE.defaultVideoAreaPositionY,
   video_area_height: 0.48,
 } as const;
@@ -79,7 +79,7 @@ export function TemplateSettingsPanel({ settings, currentSubtitle, showSafeAreas
         <Slider label="영상 확대" value={settings.zoom_scale} minimum={1} maximum={1.4} step={0.01} display={`${Math.round(settings.zoom_scale * 100)}%`} onChange={(value) => onChange({ zoom_scale: value })} />
         <Slider label="영상 가로 위치" value={settings.crop_position_x} minimum={0} maximum={1} step={0.01} display={`${Math.round(settings.crop_position_x * 100)}%`} onChange={(value) => onChange({ crop_position_x: value })} />
         <Slider label="영상 세로 위치" value={settings.crop_position_y} minimum={0} maximum={1} step={0.01} display={`${Math.round(settings.crop_position_y * 100)}%`} onChange={(value) => onChange({ crop_position_y: value })} />
-        <Slider label="영상 영역 위아래 위치" value={settings.video_area_position_y} minimum={0.28} maximum={0.45} step={0.01} display={`${Math.round(settings.video_area_position_y * 100)}%`} onChange={(value) => onChange({ video_area_position_y: value })} />
+        <Slider label="영상 영역 위아래 위치" value={settings.video_area_position_y} minimum={SERMON_LETTERBOX_TEMPLATE.videoAreaPositionMin} maximum={SERMON_LETTERBOX_TEMPLATE.videoAreaPositionMax} step={0.01} display={`${Math.round(settings.video_area_position_y * 100)}%`} onChange={(value) => onChange({ video_area_position_y: value })} />
         <fieldset><legend className="text-xs font-bold text-ink/60">재생 속도</legend><div className="mt-2 grid grid-cols-5 gap-2">{[0.9, 1, 1.1, 1.2, 1.3].map((rate) => <button key={rate} type="button" aria-pressed={settings.playback_rate === rate} onClick={() => onChange({ playback_rate: rate })} className={`focus-ring rounded-lg px-2 py-2 text-xs font-black ${settings.playback_rate === rate ? "bg-moss text-white" : "border border-ink/10 bg-cream text-ink"}`}>{rate.toFixed(1)}x</button>)}</div></fieldset>
       </div>
       <button type="button" onClick={() => onChange(LETTERBOX_COMPOSITION_RESET)} className="focus-ring mt-4 w-full rounded-lg border border-ink/10 bg-cream px-3 py-2 text-xs font-bold">영상 위치 초기화</button>

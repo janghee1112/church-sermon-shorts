@@ -38,7 +38,9 @@ class DraftPatchRequest(BaseModel):
     zoom_scale: Optional[float] = Field(default=None, ge=1.0, le=1.4)
     crop_position_x: Optional[float] = Field(default=None, ge=0, le=1)
     crop_position_y: Optional[float] = Field(default=None, ge=0, le=1)
-    video_area_position_y: Optional[float] = Field(default=None, ge=0.28, le=0.45)
+    # Broad physical bounds permit a legacy value to be sent back unchanged.
+    # The PATCH endpoint applies the current 0.22..0.34 editing range.
+    video_area_position_y: Optional[float] = Field(default=None, ge=0, le=1)
     video_area_height: Optional[float] = Field(default=None, ge=0.38, le=0.58)
     title_font_scale: Optional[float] = Field(default=None, ge=0.7, le=1.5)
     title_position_y: Optional[float] = Field(default=None, ge=0.04, le=0.28)

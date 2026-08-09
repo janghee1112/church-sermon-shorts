@@ -7,10 +7,18 @@ export const SERMON_LETTERBOX_TEMPLATE = {
   titleHighlightColorVar: "--sermon-highlight",
   previewWidth: 360,
   previewHeight: 640,
+  defaultZoomScale: 1.3,
+  defaultCropPositionX: 0.5,
+  defaultCropPositionY: 0.42,
+  defaultTitleFontScale: 1.2,
   defaultTitlePositionY: 0.08,
-  defaultSubtitlePositionY: 0.21,
-  defaultVideoAreaPositionY: 0.30,
+  defaultSubtitleFontScale: 1,
+  defaultSubtitlePositionY: 0.24,
+  defaultVideoAreaPositionY: 0.28,
+  videoAreaPositionMin: 0.22,
+  videoAreaPositionMax: 0.34,
   defaultVideoAreaHeight: 0.48,
+  defaultPlaybackRate: 1.2,
   bottomSafetyRatio: 0.1,
   banner: {
     enabled: true,
@@ -32,8 +40,8 @@ export function calculateLetterboxVideoArea(
   positionY: number,
   heightRatio: number,
 ) {
-  const safePositionY = Math.min(0.45, Math.max(0.28, positionY));
   const safeHeight = Math.min(0.58, Math.max(0.38, heightRatio));
+  const safePositionY = Math.min(1 - safeHeight, Math.max(0, positionY));
   const height = Math.min(canvasHeight - safePositionY * canvasHeight, safeHeight * canvasHeight);
   return {
     x: 0,

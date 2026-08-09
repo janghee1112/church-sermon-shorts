@@ -283,10 +283,10 @@ it("removes video darkness and resets every video position value", async () => {
   expect(screen.queryByLabelText("인물 분리 배경 어둡게")).not.toBeInTheDocument();
   expect(screen.queryByLabelText("영상 어둡기")).not.toBeInTheDocument();
   expect(LETTERBOX_COMPOSITION_RESET).toEqual({
-    zoom_scale: 1,
+    zoom_scale: 1.3,
     crop_position_x: 0.5,
-    crop_position_y: 0.5,
-    video_area_position_y: 0.3,
+    crop_position_y: 0.42,
+    video_area_position_y: 0.28,
     video_area_height: 0.48,
   });
   expect(screen.queryByText("고급 설정")).not.toBeInTheDocument();
@@ -295,15 +295,36 @@ it("removes video darkness and resets every video position value", async () => {
   expect(screen.queryByLabelText("마스크 민감도")).not.toBeInTheDocument();
 });
 
-it("uses the raised sermon letterbox defaults without changing saved draft values", () => {
-  expect(DEFAULT_TEMPLATE_SETTINGS.video_area_position_y).toBe(0.3);
+it("uses the practical new-draft defaults without changing saved draft values", () => {
+  expect(DEFAULT_TEMPLATE_SETTINGS.zoom_scale).toBe(1.3);
+  expect(DEFAULT_TEMPLATE_SETTINGS.crop_position_x).toBe(0.5);
+  expect(DEFAULT_TEMPLATE_SETTINGS.crop_position_y).toBe(0.42);
+  expect(DEFAULT_TEMPLATE_SETTINGS.video_area_position_y).toBe(0.28);
+  expect(DEFAULT_TEMPLATE_SETTINGS.playback_rate).toBe(1.2);
+  expect(DEFAULT_TEMPLATE_SETTINGS.title_font_scale).toBe(1.2);
+  expect(DEFAULT_TEMPLATE_SETTINGS.subtitle_font_scale).toBe(1);
   expect(DEFAULT_TEMPLATE_SETTINGS.title_position_y).toBe(0.08);
-  expect(DEFAULT_TEMPLATE_SETTINGS.subtitle_position_y).toBe(0.21);
+  expect(DEFAULT_TEMPLATE_SETTINGS.subtitle_position_y).toBe(0.24);
   expect(SERMON_LETTERBOX_TEMPLATE.banner.positionY).toBe(0.83);
   expect(SERMON_LETTERBOX_TEMPLATE.banner.widthRatio).toBe(0.46);
   expect(visualSettings.video_area_position_y).toBe(0.34);
   expect(visualSettings.title_position_y).toBe(0.11);
   expect(visualSettings.subtitle_position_y).toBe(0.25);
+});
+
+it("shows the new draft defaults and the 22 to 34 percent video-area range", () => {
+  const settings = { custom_title: "새 제목", ...DEFAULT_TEMPLATE_SETTINGS };
+  render(<TemplateSettingsPanel settings={settings} currentSubtitle={subtitles[0]} showSafeAreas onShowSafeAreasChange={vi.fn()} onChange={vi.fn()} />);
+  expect(screen.getByLabelText("제목 글자 크기")).toHaveValue("1.2");
+  expect(screen.getByLabelText("영상 확대")).toHaveValue("1.3");
+  expect(screen.getByLabelText("영상 가로 위치")).toHaveValue("0.5");
+  expect(screen.getByLabelText("영상 세로 위치")).toHaveValue("0.42");
+  expect(screen.getByLabelText("영상 영역 위아래 위치")).toHaveValue("0.28");
+  expect(screen.getByLabelText("영상 영역 위아래 위치")).toHaveAttribute("min", "0.22");
+  expect(screen.getByLabelText("영상 영역 위아래 위치")).toHaveAttribute("max", "0.34");
+  expect(screen.getByRole("button", { name: "1.2x" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByLabelText("자막 글자 크기")).toHaveValue("1");
+  expect(screen.getByLabelText("자막 위치")).toHaveValue("0.24");
 });
 
 it("updates title and visual sliders with exact template values", () => {
@@ -313,12 +334,12 @@ it("updates title and visual sliders with exact template values", () => {
   fireEvent.change(screen.getByLabelText("영상 확대"), { target: { value: "1.3" } });
   fireEvent.change(screen.getByLabelText("영상 가로 위치"), { target: { value: "0.7" } });
   fireEvent.change(screen.getByLabelText("영상 세로 위치"), { target: { value: "0.3" } });
-  fireEvent.change(screen.getByLabelText("영상 영역 위아래 위치"), { target: { value: "0.4" } });
+  fireEvent.change(screen.getByLabelText("영상 영역 위아래 위치"), { target: { value: "0.32" } });
   expect(onChange).toHaveBeenCalledWith({ custom_title: "하나님을\n움직이시게 하는 사람", title_highlight_ranges: [] });
   expect(onChange).toHaveBeenCalledWith({ zoom_scale: 1.3 });
   expect(onChange).toHaveBeenCalledWith({ crop_position_x: 0.7 });
   expect(onChange).toHaveBeenCalledWith({ crop_position_y: 0.3 });
-  expect(onChange).toHaveBeenCalledWith({ video_area_position_y: 0.4 });
+  expect(onChange).toHaveBeenCalledWith({ video_area_position_y: 0.32 });
 });
 
 it("shows simple playback presets and keeps position reset independent", async () => {
@@ -373,9 +394,9 @@ it("autosaves changed template settings and reports completion", async () => {
   render(<ShortsEditorPage draftId={17} />);
   const titleInput = await screen.findByLabelText("쇼츠 큰 제목");
   fireEvent.change(titleInput, { target: { value: "변경 제목" } });
-  fireEvent.change(screen.getByLabelText("영상 영역 위아래 위치"), { target: { value: "0.4" } });
+  fireEvent.change(screen.getByLabelText("영상 영역 위아래 위치"), { target: { value: "0.32" } });
   expect(screen.getByText("저장되지 않은 변경사항")).toBeInTheDocument();
-  await waitFor(() => expect(updateDraft).toHaveBeenCalledWith(17, expect.objectContaining({ custom_title: "변경 제목", video_area_position_y: 0.4, playback_rate: 1, template_type: "sermon_letterbox_v1" })), { timeout: 1800 });
+  await waitFor(() => expect(updateDraft).toHaveBeenCalledWith(17, expect.objectContaining({ custom_title: "변경 제목", video_area_position_y: 0.32, playback_rate: 1, template_type: "sermon_letterbox_v1" })), { timeout: 1800 });
   await waitFor(() => expect(screen.getByText("저장됨")).toBeInTheDocument());
 });
 
@@ -395,10 +416,10 @@ it("applies the video position reset to the loaded editor state", async () => {
   render(<ShortsEditorPage draftId={17} />);
   await screen.findByLabelText("영상 확대");
   await userEvent.click(screen.getByRole("button", { name: "영상 위치 초기화" }));
-  expect(screen.getByLabelText("영상 확대")).toHaveValue("1");
+  expect(screen.getByLabelText("영상 확대")).toHaveValue("1.3");
   expect(screen.getByLabelText("영상 가로 위치")).toHaveValue("0.5");
-  expect(screen.getByLabelText("영상 세로 위치")).toHaveValue("0.5");
-  expect(screen.getByLabelText("영상 영역 위아래 위치")).toHaveValue("0.3");
+  expect(screen.getByLabelText("영상 세로 위치")).toHaveValue("0.42");
+  expect(screen.getByLabelText("영상 영역 위아래 위치")).toHaveValue("0.28");
   await waitFor(
     () => expect(updateDraft).toHaveBeenCalledWith(17, expect.objectContaining(LETTERBOX_COMPOSITION_RESET)),
     { timeout: 1800 },

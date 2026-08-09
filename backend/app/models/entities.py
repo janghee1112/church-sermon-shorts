@@ -5,9 +5,15 @@ from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, Uniqu
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.template_defaults import (
+    SERMON_LETTERBOX_CROP_POSITION_X,
+    SERMON_LETTERBOX_CROP_POSITION_Y,
+    SERMON_LETTERBOX_PLAYBACK_RATE,
+    SERMON_LETTERBOX_SUBTITLE_FONT_SCALE,
     SERMON_LETTERBOX_SUBTITLE_POSITION_Y,
+    SERMON_LETTERBOX_TITLE_FONT_SCALE,
     SERMON_LETTERBOX_TITLE_POSITION_Y,
     SERMON_LETTERBOX_VIDEO_AREA_POSITION_Y,
+    SERMON_LETTERBOX_ZOOM_SCALE,
 )
 from app.database.session import Base
 
@@ -128,16 +134,16 @@ class ClipDraft(Base):
     custom_title: Mapped[str] = mapped_column(String(500), default="", server_default="")
     title_highlight_text: Mapped[str] = mapped_column(String(500), default="", server_default="")
     title_highlight_ranges: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
-    zoom_scale: Mapped[float] = mapped_column(Float, default=1.12, server_default="1.12")
-    crop_position_x: Mapped[float] = mapped_column(Float, default=0.5, server_default="0.5")
-    crop_position_y: Mapped[float] = mapped_column(Float, default=0.5, server_default="0.5")
-    video_area_position_y: Mapped[float] = mapped_column(Float, default=SERMON_LETTERBOX_VIDEO_AREA_POSITION_Y, server_default="0.30")
+    zoom_scale: Mapped[float] = mapped_column(Float, default=SERMON_LETTERBOX_ZOOM_SCALE, server_default="1.30")
+    crop_position_x: Mapped[float] = mapped_column(Float, default=SERMON_LETTERBOX_CROP_POSITION_X, server_default="0.50")
+    crop_position_y: Mapped[float] = mapped_column(Float, default=SERMON_LETTERBOX_CROP_POSITION_Y, server_default="0.42")
+    video_area_position_y: Mapped[float] = mapped_column(Float, default=SERMON_LETTERBOX_VIDEO_AREA_POSITION_Y, server_default="0.28")
     video_area_height: Mapped[float] = mapped_column(Float, default=0.48, server_default="0.48")
-    title_font_scale: Mapped[float] = mapped_column(Float, default=1.0, server_default="1.0")
+    title_font_scale: Mapped[float] = mapped_column(Float, default=SERMON_LETTERBOX_TITLE_FONT_SCALE, server_default="1.20")
     title_position_y: Mapped[float] = mapped_column(Float, default=SERMON_LETTERBOX_TITLE_POSITION_Y, server_default="0.08")
-    subtitle_font_scale: Mapped[float] = mapped_column(Float, default=1.0, server_default="1.0")
-    subtitle_position_y: Mapped[float] = mapped_column(Float, default=SERMON_LETTERBOX_SUBTITLE_POSITION_Y, server_default="0.21")
-    playback_rate: Mapped[float] = mapped_column(Float, default=1.0, server_default="1.0")
+    subtitle_font_scale: Mapped[float] = mapped_column(Float, default=SERMON_LETTERBOX_SUBTITLE_FONT_SCALE, server_default="1.00")
+    subtitle_position_y: Mapped[float] = mapped_column(Float, default=SERMON_LETTERBOX_SUBTITLE_POSITION_Y, server_default="0.24")
+    playback_rate: Mapped[float] = mapped_column(Float, default=SERMON_LETTERBOX_PLAYBACK_RATE, server_default="1.20")
     background_darkness: Mapped[float] = mapped_column(Float, default=0.55, server_default="0.55")
     subject_brightness: Mapped[float] = mapped_column(Float, default=1.0, server_default="1.0")
     subject_mask_enabled: Mapped[bool] = mapped_column(default=True, server_default="1")

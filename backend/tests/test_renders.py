@@ -9,6 +9,7 @@ import pytest
 from app.core.config import Settings, get_settings
 from app.models import ClipCandidate, ClipDraft, DraftSubtitle, Project, RenderJob, TranscriptSegment
 from app.services.render_crop import calculate_render_crop
+from app.services.draft_service import create_or_get_draft
 from app.services.ffmpeg_filter_builder import build_ffmpeg_command
 from app.services.render_assets import BannerAsset, calculate_banner_layout, get_template_banner, inspect_banner_asset
 from app.services.render_service import (
@@ -82,8 +83,8 @@ def test_render_job_snapshot_duplicate_and_version(db_session, sample_video):
     assert snapshot["video_area_position_y"] == 0.34
     assert snapshot["title_position_y"] == 0.11
     assert snapshot["subtitle_position_y"] == 0.25
-    assert snapshot["playback_rate"] == 1.0
-    assert snapshot["output_duration_sec"] == pytest.approx(1.2)
+    assert snapshot["playback_rate"] == 1.2
+    assert snapshot["output_duration_sec"] == pytest.approx(1.0)
     assert snapshot["fonts"]["title_key"] == "pretendard_black_v1"
     assert snapshot["fonts"]["title_name"] == "Pretendard Black"
     first.status = "completed"
@@ -96,17 +97,84 @@ def test_render_job_snapshot_duplicate_and_version(db_session, sample_video):
 
 def test_render_snapshot_uses_new_letterbox_defaults(db_session, sample_video):
     draft = seed_renderable_draft(db_session, sample_video)
-    draft.video_area_position_y = 0.30
+    draft.zoom_scale = 1.30
+    draft.crop_position_x = 0.50
+    draft.crop_position_y = 0.42
+    draft.video_area_position_y = 0.28
+    draft.title_font_scale = 1.20
     draft.title_position_y = 0.08
-    draft.subtitle_position_y = 0.21
+    draft.subtitle_font_scale = 1.00
+    draft.subtitle_position_y = 0.24
+    draft.playback_rate = 1.20
     db_session.commit()
     job, _ = create_render_job(db_session, draft.id)
     snapshot = json.loads(job.settings_snapshot)
-    assert snapshot["video_area_position_y"] == 0.30
+    assert snapshot["zoom_scale"] == 1.30
+    assert snapshot["crop_position_x"] == 0.50
+    assert snapshot["crop_position_y"] == 0.42
+    assert snapshot["video_area_position_y"] == 0.28
+    assert snapshot["title_font_scale"] == 1.20
     assert snapshot["title_position_y"] == 0.08
-    assert snapshot["subtitle_position_y"] == 0.21
+    assert snapshot["subtitle_font_scale"] == 1.00
+    assert snapshot["subtitle_position_y"] == 0.24
+    assert snapshot["playback_rate"] == 1.20
     assert snapshot["banner"]["width_ratio"] == 0.46
     assert snapshot["banner"]["position_y"] == 0.83
+
+
+def test_new_draft_defaults_render_an_actual_mp4(db_session, sample_video):
+    project = Project(
+        id="new-default-render-project", original_file_name="새 설교.mp4",
+        stored_file_path=str(sample_video), duration_seconds=3, width=320, height=180,
+        file_size=sample_video.stat().st_size, status="completed", progress=100, analysis_mode="real",
+    )
+    segment = TranscriptSegment(
+        project=project, start_sec=0.2, end_sec=1.4,
+        text="새 기본값으로 렌더링하는 실제 전사 자막입니다.", segment_order=1,
+    )
+    candidate = ClipCandidate(
+        project=project, candidate_order=1, recommendation_type="핵심 메시지",
+        segment_count=1, start_sec=0.2, end_sec=1.4, duration_sec=1.2,
+        transcript=segment.text, main_topic="기본값", selection_reason="테스트",
+        centrality_score=90, standalone_score=90, hook_score=90,
+        emotional_score=90, overall_score=90,
+    )
+    db_session.add_all([project, segment, candidate])
+    db_session.flush()
+    candidate.start_segment_id = segment.id
+    candidate.end_segment_id = segment.id
+    db_session.commit()
+
+    draft = create_or_get_draft(db_session, project.id, candidate.id)
+    job, _ = create_render_job(db_session, draft.id)
+    snapshot = json.loads(job.settings_snapshot)
+    process_render_job(db_session, job.id)
+    db_session.refresh(job)
+
+    assert {
+        "zoom_scale": snapshot["zoom_scale"],
+        "crop_position_x": snapshot["crop_position_x"],
+        "crop_position_y": snapshot["crop_position_y"],
+        "video_area_position_y": snapshot["video_area_position_y"],
+        "playback_rate": snapshot["playback_rate"],
+        "title_font_scale": snapshot["title_font_scale"],
+        "subtitle_font_scale": snapshot["subtitle_font_scale"],
+        "subtitle_position_y": snapshot["subtitle_position_y"],
+    } == {
+        "zoom_scale": 1.30,
+        "crop_position_x": 0.50,
+        "crop_position_y": 0.42,
+        "video_area_position_y": 0.28,
+        "playback_rate": 1.20,
+        "title_font_scale": 1.20,
+        "subtitle_font_scale": 1.00,
+        "subtitle_position_y": 0.24,
+    }
+    assert job.status == "completed", job.error_message
+    assert Path(job.output_file_path).is_file()
+    assert job.output_width == 1080
+    assert job.output_height == 1920
+    assert job.output_duration_sec == pytest.approx(1.0, abs=0.1)
 
 
 def test_ffmpeg_command_does_not_apply_video_darkness(tmp_path):

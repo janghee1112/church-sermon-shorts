@@ -7,9 +7,15 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.template_defaults import (
+    SERMON_LETTERBOX_CROP_POSITION_X,
+    SERMON_LETTERBOX_CROP_POSITION_Y,
+    SERMON_LETTERBOX_PLAYBACK_RATE,
+    SERMON_LETTERBOX_SUBTITLE_FONT_SCALE,
     SERMON_LETTERBOX_SUBTITLE_POSITION_Y,
+    SERMON_LETTERBOX_TITLE_FONT_SCALE,
     SERMON_LETTERBOX_TITLE_POSITION_Y,
     SERMON_LETTERBOX_VIDEO_AREA_POSITION_Y,
+    SERMON_LETTERBOX_ZOOM_SCALE,
 )
 from app.models import CandidateTitle, ClipCandidate, ClipDraft, DraftSubtitle, Project, TranscriptSegment, TranscriptWord
 from app.schemas.drafts import SubtitleSaveItem
@@ -113,16 +119,16 @@ def create_or_get_draft(
         custom_title=selected_title,
         title_highlight_text="",
         title_highlight_ranges="[]",
-        zoom_scale=1.12,
-        crop_position_x=0.5,
-        crop_position_y=0.5,
+        zoom_scale=SERMON_LETTERBOX_ZOOM_SCALE,
+        crop_position_x=SERMON_LETTERBOX_CROP_POSITION_X,
+        crop_position_y=SERMON_LETTERBOX_CROP_POSITION_Y,
         video_area_position_y=SERMON_LETTERBOX_VIDEO_AREA_POSITION_Y,
         video_area_height=0.48,
-        title_font_scale=1.0,
+        title_font_scale=SERMON_LETTERBOX_TITLE_FONT_SCALE,
         title_position_y=SERMON_LETTERBOX_TITLE_POSITION_Y,
-        subtitle_font_scale=1.0,
+        subtitle_font_scale=SERMON_LETTERBOX_SUBTITLE_FONT_SCALE,
         subtitle_position_y=SERMON_LETTERBOX_SUBTITLE_POSITION_Y,
-        playback_rate=1.0,
+        playback_rate=SERMON_LETTERBOX_PLAYBACK_RATE,
         template_type="sermon_letterbox_v1",
         status="editing",
     )

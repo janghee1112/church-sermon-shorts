@@ -8,9 +8,9 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import get_settings
 from app.core.template_defaults import (
-    SERMON_LETTERBOX_SUBTITLE_POSITION_Y,
+    LEGACY_SUBTITLE_POSITION_Y,
+    LEGACY_VIDEO_AREA_POSITION_Y,
     SERMON_LETTERBOX_TITLE_POSITION_Y,
-    SERMON_LETTERBOX_VIDEO_AREA_POSITION_Y,
 )
 
 
@@ -61,12 +61,12 @@ def _add_mvp_columns(target_engine: Engine = engine) -> None:
             "title_highlight_ranges": "TEXT NOT NULL DEFAULT '[]'",
             "zoom_scale": "FLOAT NOT NULL DEFAULT 1.12",
             "crop_position_y": "FLOAT NOT NULL DEFAULT 0.6",
-            "video_area_position_y": f"FLOAT NOT NULL DEFAULT {SERMON_LETTERBOX_VIDEO_AREA_POSITION_Y}",
+            "video_area_position_y": f"FLOAT NOT NULL DEFAULT {LEGACY_VIDEO_AREA_POSITION_Y}",
             "video_area_height": "FLOAT NOT NULL DEFAULT 0.48",
             "title_font_scale": "FLOAT NOT NULL DEFAULT 1.0",
             "title_position_y": f"FLOAT NOT NULL DEFAULT {SERMON_LETTERBOX_TITLE_POSITION_Y}",
             "subtitle_font_scale": "FLOAT NOT NULL DEFAULT 1.0",
-            "subtitle_position_y": f"FLOAT NOT NULL DEFAULT {SERMON_LETTERBOX_SUBTITLE_POSITION_Y}",
+            "subtitle_position_y": f"FLOAT NOT NULL DEFAULT {LEGACY_SUBTITLE_POSITION_Y}",
             "playback_rate": "FLOAT NOT NULL DEFAULT 1.0",
             "background_darkness": "FLOAT NOT NULL DEFAULT 0.55",
             "subject_brightness": "FLOAT NOT NULL DEFAULT 1.0",

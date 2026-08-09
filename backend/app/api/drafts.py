@@ -1,6 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.template_defaults import (
+    SERMON_LETTERBOX_VIDEO_AREA_POSITION_MAX,
+    SERMON_LETTERBOX_VIDEO_AREA_POSITION_MIN,
+)
 from app.database.session import get_db
 from app.models import DraftSubtitle
 from app.schemas.drafts import (
@@ -68,6 +72,15 @@ def patch_draft(draft_id: int, payload: DraftPatchRequest, db: Session = Depends
     try:
         draft = get_draft(db, draft_id)
         values = payload.model_dump(exclude_unset=True)
+        incoming_video_position = values.get("video_area_position_y")
+        if (
+            incoming_video_position is not None
+            and not SERMON_LETTERBOX_VIDEO_AREA_POSITION_MIN
+            <= incoming_video_position
+            <= SERMON_LETTERBOX_VIDEO_AREA_POSITION_MAX
+            and abs(incoming_video_position - draft.video_area_position_y) > 1e-9
+        ):
+            raise DraftError("영상 영역 위치는 22%에서 34% 사이여야 합니다.")
         incoming_ranges = values.pop("title_highlight_ranges", None)
         title_changed = "custom_title" in values and values["custom_title"] != draft.custom_title
         next_title = values.get("custom_title", draft.custom_title)
