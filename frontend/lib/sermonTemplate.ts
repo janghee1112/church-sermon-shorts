@@ -30,7 +30,7 @@ export const SERMON_LETTERBOX_TEMPLATE = {
     sourceHeight: 361,
     widthRatio: 0.46,
     positionX: 0.5,
-    positionY: 0.822,
+    positionY: 0.806375,
   },
 } as const;
 

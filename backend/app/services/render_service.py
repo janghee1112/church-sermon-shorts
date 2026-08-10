@@ -414,8 +414,6 @@ def process_render_job(db: Session, render_id: int) -> None:
             )
         except ValueError as exc:
             raise RenderError(str(exc), "banner_layout_invalid") from exc
-        if banner_layout.y < video_top + video_height:
-            raise RenderError("교회 배너가 영상 영역과 겹칩니다.", "banner_layout_invalid")
         overlay_manifest_path, overlay_assets = render_subtitle_timeline(
             work_dir, relative_cues, width, height, subtitle_font, subtitle_size,
             float(snapshot["subtitle_position_y"]), output_duration,
