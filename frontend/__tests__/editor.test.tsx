@@ -207,7 +207,7 @@ it("uses the canonical server title layout without browser re-wrapping", async (
   expect(Number.parseFloat(screen.getByTestId("template-title-bounds").style.width)).toBeCloseTo((929 / 1080) * 100);
 });
 
-it("places the church banner 30px higher in the final canvas without changing its ratio", () => {
+it("places the church banner another 30px higher and at 80 percent of its previous size", () => {
   render(<VerticalVideoPreview projectId="p1" startSec={10} endSec={15} title="큰 제목" settings={visualSettings} subtitles={subtitles} showSafeAreas onTimeChange={vi.fn()} />);
   const banner = screen.getByTestId("church-banner") as HTMLImageElement;
   const config = SERMON_LETTERBOX_TEMPLATE.banner;
@@ -221,8 +221,8 @@ it("places the church banner 30px higher in the final canvas without changing it
   expect(banner).toHaveClass("h-auto", "object-contain", "pointer-events-none", "select-none");
   expect(banner.style.left).toBe("50%");
   expect(banner.style.transform).toBe("translateX(-50%)");
-  expect(banner.style.width).toBe("46%");
-  expect(banner.style.top).toBe("80.64%");
+  expect(banner.style.width).toBe("36.8%");
+  expect(banner.style.top).toBe("79.06%");
   expect(bannerTop).toBeLessThan(videoBottom);
   expect(bannerTop).toBeGreaterThan(SERMON_LETTERBOX_TEMPLATE.previewHeight * visualSettings.subtitle_position_y);
   expect(bannerTop + bannerHeight).toBeLessThan(SERMON_LETTERBOX_TEMPLATE.previewHeight * 0.95);
@@ -305,8 +305,8 @@ it("uses the practical new-draft defaults without changing saved draft values", 
   expect(DEFAULT_TEMPLATE_SETTINGS.subtitle_font_scale).toBe(1);
   expect(DEFAULT_TEMPLATE_SETTINGS.title_position_y).toBe(0.08);
   expect(DEFAULT_TEMPLATE_SETTINGS.subtitle_position_y).toBe(0.24);
-  expect(SERMON_LETTERBOX_TEMPLATE.banner.positionY).toBe(0.806375);
-  expect(SERMON_LETTERBOX_TEMPLATE.banner.widthRatio).toBe(0.46);
+  expect(SERMON_LETTERBOX_TEMPLATE.banner.positionY).toBe(0.790625);
+  expect(SERMON_LETTERBOX_TEMPLATE.banner.widthRatio).toBe(0.368);
   expect(visualSettings.video_area_position_y).toBe(0.34);
   expect(visualSettings.title_position_y).toBe(0.11);
   expect(visualSettings.subtitle_position_y).toBe(0.25);

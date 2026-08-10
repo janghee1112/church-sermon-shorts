@@ -28,9 +28,9 @@ export const SERMON_LETTERBOX_TEMPLATE = {
     assetPath: "/assets/church/onnuri-vision-banner.png",
     sourceWidth: 1799,
     sourceHeight: 361,
-    widthRatio: 0.46,
+    widthRatio: 0.368,
     positionX: 0.5,
-    positionY: 0.806375,
+    positionY: 0.790625,
   },
 } as const;
 

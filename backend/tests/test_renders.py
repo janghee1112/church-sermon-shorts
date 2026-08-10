@@ -78,9 +78,9 @@ def test_render_job_snapshot_duplicate_and_version(db_session, sample_video):
     assert [line["text"] for line in snapshot["title_layout"]["lines"]] == ["믿음으로", "걸어갑시다"]
     assert "video_darkness" not in snapshot
     assert snapshot["banner"]["asset_key"] == "onnuri_vision_church"
-    assert snapshot["banner"]["width_ratio"] == 0.46
+    assert snapshot["banner"]["width_ratio"] == 0.368
     assert snapshot["banner"]["position_x"] == 0.5
-    assert snapshot["banner"]["position_y"] == 0.806375
+    assert snapshot["banner"]["position_y"] == 0.790625
     assert snapshot["video_area_position_y"] == 0.34
     assert snapshot["title_position_y"] == 0.11
     assert snapshot["subtitle_position_y"] == 0.25
@@ -119,8 +119,8 @@ def test_render_snapshot_uses_new_letterbox_defaults(db_session, sample_video):
     assert snapshot["subtitle_font_scale"] == 1.00
     assert snapshot["subtitle_position_y"] == 0.24
     assert snapshot["playback_rate"] == 1.20
-    assert snapshot["banner"]["width_ratio"] == 0.46
-    assert snapshot["banner"]["position_y"] == 0.806375
+    assert snapshot["banner"]["width_ratio"] == 0.368
+    assert snapshot["banner"]["position_y"] == 0.790625
 
 
 def test_new_draft_defaults_render_an_actual_mp4(db_session, sample_video):
@@ -351,13 +351,13 @@ def test_banner_asset_alpha_and_safe_centered_layout(tmp_path):
 
     asset = get_template_banner("sermon_letterbox_v1")
     source_width, source_height = inspect_banner_asset(asset)
-    layout = calculate_banner_layout(1080, 1920, source_width, source_height, 0.46, 0.5, 0.806375)
+    layout = calculate_banner_layout(1080, 1920, source_width, source_height, 0.368, 0.5, 0.790625)
     with Image.open(asset.path) as image:
         alpha_min, alpha_max = image.getchannel("A").getextrema()
     assert (source_width, source_height) == (1799, 361)
     assert (alpha_min, alpha_max) == (0, 255)
-    assert (layout.width, layout.height, layout.x, layout.y) == (497, 100, 292, 1548)
-    assert round(1920 * 0.822) - layout.y == 30
+    assert (layout.width, layout.height, layout.x, layout.y) == (397, 80, 342, 1518)
+    assert round(1920 * 0.806375) - layout.y == 30
     assert abs((layout.x + layout.width / 2) - 540) <= 0.5
     assert layout.y < round(1920 * (0.34 + 0.48))
     assert layout.bottom <= 1760
@@ -539,7 +539,7 @@ def test_real_ffmpeg_render_stream_range_and_download(client, db_session, sample
         "-frames:v", "1", str(rendered_frame),
     ], check=True)
     banner_source = inspect_banner_asset(get_template_banner("sermon_letterbox_v1"))
-    layout = calculate_banner_layout(1080, 1920, *banner_source, 0.46, 0.5, 0.806375)
+    layout = calculate_banner_layout(1080, 1920, *banner_source, 0.368, 0.5, 0.790625)
     with Image.open(rendered_frame).convert("RGB") as frame:
         banner_region = frame.crop((layout.x, layout.y, layout.right, layout.bottom))
         non_black = sum(1 for pixel in banner_region.getdata() if max(pixel) > 30)
