@@ -1,4 +1,4 @@
-import type { CandidateResults, ClipDraft, DraftEditableSettings, DraftSubtitle, Project, RenderJob, TitleHighlightRange, TitleLayoutPreview, Transcript } from "@/types";
+import type { CandidateResults, ClipDraft, DraftEditableSettings, DraftSubtitle, Project, RenderJob, SubtitleLayoutPreview, TitleHighlightRange, TitleLayoutPreview, Transcript } from "@/types";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? (process.env.NODE_ENV === "production" ? "" : "http://localhost:8000");
 
@@ -180,6 +180,17 @@ export const getTitleLayoutPreview = (
   }),
   signal,
 }).then(parseResponse<TitleLayoutPreview>);
+
+export const getSubtitleLayoutPreview = (
+  text: string,
+  subtitleFontScale: number,
+  signal?: AbortSignal,
+) => fetch(`${API_BASE}/api/subtitle-layout/preview`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ text, subtitle_font_scale: subtitleFontScale }),
+  signal,
+}).then(parseResponse<SubtitleLayoutPreview>);
 
 export const createDraft = (projectId: string, candidateId: number, selectedTitleOrder: number) =>
   fetch(`${API_BASE}/api/projects/${projectId}/drafts`, {

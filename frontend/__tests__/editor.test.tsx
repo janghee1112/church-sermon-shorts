@@ -26,6 +26,7 @@ const apiMocks = vi.hoisted(() => ({
   getRender: vi.fn(),
   getDraftRenders: vi.fn(),
   getTitleLayoutPreview: vi.fn(),
+  getSubtitleLayoutPreview: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, back: vi.fn() }) }));
 vi.mock("@/lib/api", async () => {
@@ -115,6 +116,7 @@ beforeEach(() => {
   Object.values(apiMocks).forEach((mock) => mock.mockReset());
   apiMocks.getDraftRenders.mockResolvedValue([]);
   apiMocks.getTitleLayoutPreview.mockImplementation((title: string) => Promise.resolve(titleLayoutFixture(title)));
+  apiMocks.getSubtitleLayoutPreview.mockImplementation((text: string) => Promise.resolve({ canvas_width: 1080, canvas_height: 1920, font_size_px: 52, line_height_px: 67, lines: [text], font_key: "korean_gothic_v1", font_name: "NanumGothic" }));
 });
 
 it("opens the editor only through the dedicated candidate edit button", async () => {

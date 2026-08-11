@@ -2,10 +2,10 @@
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { formatTime } from "@/lib/time";
-import { getTitleLayoutPreview, videoUrl } from "@/lib/api";
+import { getSubtitleLayoutPreview, getTitleLayoutPreview, videoUrl } from "@/lib/api";
 import { calculateVerticalCrop } from "@/lib/verticalCrop";
 import { calculateLetterboxVideoArea, SERMON_LETTERBOX_TEMPLATE } from "@/lib/sermonTemplate";
-import type { DraftSubtitle, DraftVisualSettings, TitleLayoutPreview } from "@/types";
+import type { DraftSubtitle, DraftVisualSettings, SubtitleLayoutPreview, TitleLayoutPreview } from "@/types";
 
 const PREVIEW_WIDTH = SERMON_LETTERBOX_TEMPLATE.previewWidth;
 const PREVIEW_HEIGHT = SERMON_LETTERBOX_TEMPLATE.previewHeight;
@@ -59,6 +59,8 @@ export const VerticalVideoPreview = forwardRef<VideoPreviewHandle, Props>(functi
   const [textOverlap, setTextOverlap] = useState(false);
   const [subtitleVideoOverlap, setSubtitleVideoOverlap] = useState(false);
   const [titleLayoutState, setTitleLayoutState] = useState<{ key: string; value: TitleLayoutPreview } | null>(null);
+  const [subtitleLayoutState, setSubtitleLayoutState] = useState<{ key: string; value: SubtitleLayoutPreview } | null>(null);
+  const subtitleLayoutCacheRef = useRef(new Map<string, SubtitleLayoutPreview>());
   const activeCue = subtitles.find((cue) => currentTime >= cue.start_sec - 0.05 && currentTime < cue.end_sec + 0.05);
   const activeText = activeCue ? activeCue.edited_text || activeCue.original_text : "";
   const progress = Math.max(0, Math.min(100, ((currentTime - startSec) / Math.max(0.1, endSec - startSec)) * 100));
@@ -69,6 +71,8 @@ export const VerticalVideoPreview = forwardRef<VideoPreviewHandle, Props>(functi
     settings.title_highlight_ranges,
   ]);
   const titleLayout = titleLayoutState?.key === titleLayoutKey ? titleLayoutState.value : null;
+  const subtitleLayoutKey = JSON.stringify([activeText, settings.subtitle_font_scale]);
+  const subtitleLayout = subtitleLayoutState?.key === subtitleLayoutKey ? subtitleLayoutState.value : null;
 
   useEffect(() => {
     const video = videoRef.current;
@@ -101,6 +105,32 @@ export const VerticalVideoPreview = forwardRef<VideoPreviewHandle, Props>(functi
       controller.abort();
     };
   }, [title, titleLayoutKey, settings.title_font_scale, settings.title_position_y, settings.title_highlight_ranges]);
+
+  useEffect(() => {
+    if (!activeText) {
+      setSubtitleLayoutState(null);
+      return;
+    }
+    const cached = subtitleLayoutCacheRef.current.get(subtitleLayoutKey);
+    if (cached) {
+      setSubtitleLayoutState({ key: subtitleLayoutKey, value: cached });
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void getSubtitleLayoutPreview(activeText, settings.subtitle_font_scale, controller.signal).then((value) => {
+        subtitleLayoutCacheRef.current.set(subtitleLayoutKey, value);
+        setSubtitleLayoutState({ key: subtitleLayoutKey, value });
+      }).catch((caught: unknown) => {
+        if (caught instanceof DOMException && caught.name === "AbortError") return;
+        if (process.env.NODE_ENV !== "production") console.warn("자막 레이아웃 미리보기를 불러오지 못했습니다.");
+      });
+    }, 80);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [activeText, subtitleLayoutKey, settings.subtitle_font_scale]);
 
   function ensureCanvas(refValue: typeof sourceCanvasRef, width: number, height: number) {
     if (!refValue.current) {
@@ -277,7 +307,7 @@ export const VerticalVideoPreview = forwardRef<VideoPreviewHandle, Props>(functi
               }}
             />
           </>}
-          {activeText && <div ref={subtitleRef} data-font-key={SERMON_LETTERBOX_TEMPLATE.subtitleFontKey} data-testid="active-subtitle" className="template-subtitle pointer-events-none absolute inset-x-[6%] z-20 whitespace-pre-line text-center font-bold leading-snug text-white" style={{ top: `${settings.subtitle_position_y * 100}%`, fontSize: `${1.05 * settings.subtitle_font_scale}rem`, fontFamily: SERMON_LETTERBOX_TEMPLATE.subtitleFontFamily, WebkitTextStroke: "1px #000000" }}>{activeText}</div>}
+          {activeText && <div ref={subtitleRef} data-font-key={SERMON_LETTERBOX_TEMPLATE.subtitleFontKey} data-testid="active-subtitle" className="template-subtitle pointer-events-none absolute inset-x-[6%] z-20 whitespace-pre-line text-center font-bold text-white" style={{ top: `${settings.subtitle_position_y * 100}%`, fontSize: subtitleLayout ? `${subtitleLayout.font_size_px * (PREVIEW_WIDTH / subtitleLayout.canvas_width)}px` : `${1.05 * settings.subtitle_font_scale}rem`, lineHeight: subtitleLayout ? `${subtitleLayout.line_height_px * (PREVIEW_WIDTH / subtitleLayout.canvas_width)}px` : undefined, fontFamily: SERMON_LETTERBOX_TEMPLATE.subtitleFontFamily, WebkitTextStroke: "1px #000000" }}>{subtitleLayout ? subtitleLayout.lines.join("\n") : activeText}</div>}
           {SERMON_LETTERBOX_TEMPLATE.banner.enabled && !bannerFailed && <img
             data-testid="church-banner"
             data-asset-key={SERMON_LETTERBOX_TEMPLATE.banner.assetKey}

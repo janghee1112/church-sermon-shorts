@@ -13,6 +13,7 @@ from app.api.projects import router as projects_router
 from app.api.drafts import router as drafts_router
 from app.api.renders import router as renders_router
 from app.api.title_layout import router as title_layout_router
+from app.api.subtitle_layout import router as subtitle_layout_router
 from app.api.uploads import router as uploads_router
 from app.core.config import get_settings
 from app.database.session import SessionLocal, init_db
@@ -50,6 +51,7 @@ app.include_router(projects_router)
 app.include_router(drafts_router)
 app.include_router(renders_router)
 app.include_router(title_layout_router)
+app.include_router(subtitle_layout_router)
 app.include_router(uploads_router)
 
 

@@ -161,6 +161,16 @@ export interface TitleLayoutPreview {
   image_data_url: string;
 }
 
+export interface SubtitleLayoutPreview {
+  canvas_width: number;
+  canvas_height: number;
+  font_size_px: number;
+  line_height_px: number;
+  lines: string[];
+  font_key: string;
+  font_name: string;
+}
+
 export interface ClipDraft {
   id: number;
   project_id: string;

@@ -4,6 +4,49 @@ from typing import Iterable, Mapping
 from app.core.template_defaults import SERMON_LETTERBOX_SUBTITLE_POSITION_MAX
 
 
+def calculate_subtitle_layout(
+    text: str,
+    font_path: Path,
+    font_size: int,
+    canvas_width: int,
+) -> dict[str, object]:
+    from PIL import Image, ImageDraw, ImageFont
+
+    max_width = round(canvas_width * 0.88)
+    measure = ImageDraw.Draw(Image.new("L", (1, 1)))
+    selected_font = None
+    selected_lines: list[str] = []
+    for size in range(font_size, 35, -2):
+        font = ImageFont.truetype(str(font_path), size=size)
+        lines: list[str] = []
+        for manual_line in text.splitlines() or [text]:
+            words = manual_line.split()
+            if not words:
+                lines.append("")
+                continue
+            current = words[0]
+            for word in words[1:]:
+                candidate = f"{current} {word}"
+                if measure.textlength(candidate, font=font) <= max_width:
+                    current = candidate
+                else:
+                    lines.append(current)
+                    current = word
+            lines.append(current)
+        if len(lines) <= 2 and all(measure.textlength(line, font=font) <= max_width for line in lines):
+            selected_font = font
+            selected_lines = lines
+            break
+    if selected_font is None:
+        selected_font = ImageFont.truetype(str(font_path), size=36)
+        selected_lines = text.splitlines() or [text]
+    return {
+        "font_size_px": selected_font.size,
+        "line_height_px": round(selected_font.size * 1.28),
+        "lines": selected_lines,
+    }
+
+
 def _ass_time(seconds: float) -> str:
     total = max(0, round(seconds * 100))
     hours, remainder = divmod(total, 360000)
@@ -89,42 +132,16 @@ def render_subtitle_images(
     font_size: int,
     position_y: float,
 ) -> list[tuple[Path, float, float]]:
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw
 
     rendered: list[tuple[Path, float, float]] = []
-    max_width = round(canvas_width * 0.88)
     y = round(min(SERMON_LETTERBOX_SUBTITLE_POSITION_MAX, max(0.18, position_y)) * canvas_height)
     for index, cue in enumerate(cues, start=1):
         text = str(cue["text"])
-        selected_font = None
-        selected_lines: list[str] = []
-        for size in range(font_size, 35, -2):
-            font = ImageFont.truetype(str(font_path), size=size)
-            lines: list[str] = []
-            for manual_line in text.splitlines() or [text]:
-                words = manual_line.split()
-                if not words:
-                    lines.append("")
-                    continue
-                current = words[0]
-                for word in words[1:]:
-                    candidate = f"{current} {word}"
-                    if ImageDraw.Draw(Image.new("L", (1, 1))).textlength(candidate, font=font) <= max_width:
-                        current = candidate
-                    else:
-                        lines.append(current)
-                        current = word
-                lines.append(current)
-            if len(lines) <= 2 and all(
-                ImageDraw.Draw(Image.new("L", (1, 1))).textlength(line, font=font) <= max_width
-                for line in lines
-            ):
-                selected_font = font
-                selected_lines = lines
-                break
-        if selected_font is None:
-            selected_font = ImageFont.truetype(str(font_path), size=36)
-            selected_lines = text.splitlines() or [text]
+        layout = calculate_subtitle_layout(text, font_path, font_size, canvas_width)
+        from PIL import ImageFont
+        selected_font = ImageFont.truetype(str(font_path), size=int(layout["font_size_px"]))
+        selected_lines = list(layout["lines"])
         image = Image.new("RGBA", (canvas_width, canvas_height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(image)
         line_height = round(selected_font.size * 1.28)
