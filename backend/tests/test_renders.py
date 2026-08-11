@@ -88,6 +88,7 @@ def test_render_job_snapshot_duplicate_and_version(db_session, sample_video):
     assert snapshot["output_duration_sec"] == pytest.approx(1.0)
     assert snapshot["fonts"]["title_key"] == "pretendard_black_v1"
     assert snapshot["fonts"]["title_name"] == "Pretendard Black"
+    assert snapshot["fonts"]["subtitle_key"] == "nanum_gothic"
     first.status = "completed"
     db_session.commit()
     second, second_created = create_render_job(db_session, draft.id)

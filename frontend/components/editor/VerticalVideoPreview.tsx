@@ -277,7 +277,7 @@ export const VerticalVideoPreview = forwardRef<VideoPreviewHandle, Props>(functi
               }}
             />
           </>}
-          {activeText && <div ref={subtitleRef} data-font-key={SERMON_LETTERBOX_TEMPLATE.subtitleFontKey} data-testid="active-subtitle" className="template-subtitle pointer-events-none absolute inset-x-[6%] z-20 whitespace-pre-line text-center font-bold leading-snug text-white" style={{ top: `${settings.subtitle_position_y * 100}%`, fontSize: `${1.05 * settings.subtitle_font_scale}rem`, fontFamily: SERMON_LETTERBOX_TEMPLATE.subtitleFontFamily }}>{activeText}</div>}
+          {activeText && <div ref={subtitleRef} data-font-key={SERMON_LETTERBOX_TEMPLATE.subtitleFontKey} data-testid="active-subtitle" className="template-subtitle pointer-events-none absolute inset-x-[6%] z-20 whitespace-pre-line text-center font-bold leading-snug text-white" style={{ top: `${settings.subtitle_position_y * 100}%`, fontSize: `${1.05 * settings.subtitle_font_scale}rem`, fontFamily: SERMON_LETTERBOX_TEMPLATE.subtitleFontFamily, WebkitTextStroke: "1px #000000" }}>{activeText}</div>}
           {SERMON_LETTERBOX_TEMPLATE.banner.enabled && !bannerFailed && <img
             data-testid="church-banner"
             data-asset-key={SERMON_LETTERBOX_TEMPLATE.banner.assetKey}

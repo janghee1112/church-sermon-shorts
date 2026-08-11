@@ -165,7 +165,7 @@ def _build_snapshot(draft: ClipDraft, settings: Settings) -> dict[str, Any]:
         },
         "fonts": {
             "title_key": "pretendard_black_v1",
-            "subtitle_key": "myeongjo",
+            "subtitle_key": "nanum_gothic",
             "title_path": str(settings.title_font_path),
             "subtitle_path": str(settings.subtitle_font_path),
             "title_name": settings.title_font_name,

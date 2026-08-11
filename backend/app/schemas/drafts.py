@@ -45,7 +45,7 @@ class DraftPatchRequest(BaseModel):
     title_font_scale: Optional[float] = Field(default=None, ge=0.7, le=1.5)
     title_position_y: Optional[float] = Field(default=None, ge=0.04, le=0.28)
     subtitle_font_scale: Optional[float] = Field(default=None, ge=0.7, le=1.5)
-    subtitle_position_y: Optional[float] = Field(default=None, ge=0.18, le=0.5)
+    subtitle_position_y: Optional[float] = Field(default=None, ge=0.18, le=0.790625)
     playback_rate: Optional[float] = Field(default=None, ge=0.75, le=1.5, allow_inf_nan=False)
     template_type: Optional[Literal["sermon_letterbox_v1"]] = None
     status: Optional[Literal["editing", "ready"]] = None

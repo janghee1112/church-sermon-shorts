@@ -6,7 +6,14 @@
   color-scheme: light;
   --sermon-highlight: #ffd84d;
   --sermon-title-font: var(--font-pretendard-black), "Pretendard Black", sans-serif;
-  --sermon-subtitle-font: "Noto Serif KR", "Nanum Myeongjo", "Batang", Georgia, serif;
+  --sermon-subtitle-font: "Nanum Gothic", Arial, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+@font-face {
+  font-family: "Nanum Gothic";
+  src: url("/assets/fonts/NanumGothic-Bold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
 }
 * { box-sizing: border-box; }
 html { background: #f7f4ec; }

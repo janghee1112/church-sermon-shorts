@@ -32,9 +32,9 @@ class Settings(BaseSettings):
     render_crf: int = 20
     render_preset: str = "medium"
     title_font_path: Path = PROJECT_ROOT / "backend" / "assets" / "fonts" / "Pretendard-Black.otf"
-    subtitle_font_path: Path = PROJECT_ROOT / "backend" / "assets" / "fonts" / "NanumMyeongjo-Regular.ttf"
+    subtitle_font_path: Path = PROJECT_ROOT / "backend" / "assets" / "fonts" / "NanumGothic-Bold.ttf"
     title_font_name: str = "Pretendard Black"
-    subtitle_font_name: str = "NanumMyeongjo"
+    subtitle_font_name: str = "NanumGothic"
     storage_backend: str = "local"
     r2_account_id: str = ""
     r2_access_key_id: str = ""

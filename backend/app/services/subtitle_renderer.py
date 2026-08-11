@@ -1,6 +1,8 @@
 from pathlib import Path
 from typing import Iterable, Mapping
 
+from app.core.template_defaults import SERMON_LETTERBOX_SUBTITLE_POSITION_MAX
+
 
 def _ass_time(seconds: float) -> str:
     total = max(0, round(seconds * 100))
@@ -48,8 +50,8 @@ def write_ass_subtitles(
     font_size: int,
     position_y: float,
 ) -> None:
-    y = round(min(0.5, max(0.18, position_y)) * canvas_height)
-    outline = max(2, round(font_size * 0.055))
+    y = round(min(SERMON_LETTERBOX_SUBTITLE_POSITION_MAX, max(0.18, position_y)) * canvas_height)
+    outline = max(1, round(font_size * 0.025))
     header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {canvas_width}
@@ -91,7 +93,7 @@ def render_subtitle_images(
 
     rendered: list[tuple[Path, float, float]] = []
     max_width = round(canvas_width * 0.88)
-    y = round(min(0.5, max(0.18, position_y)) * canvas_height)
+    y = round(min(SERMON_LETTERBOX_SUBTITLE_POSITION_MAX, max(0.18, position_y)) * canvas_height)
     for index, cue in enumerate(cues, start=1):
         text = str(cue["text"])
         selected_font = None
@@ -126,7 +128,7 @@ def render_subtitle_images(
         image = Image.new("RGBA", (canvas_width, canvas_height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(image)
         line_height = round(selected_font.size * 1.28)
-        stroke = max(2, round(selected_font.size * 0.055))
+        stroke = max(1, round(selected_font.size * 0.025))
         line_y = y
         for line in selected_lines:
             width = draw.textlength(line, font=selected_font)

@@ -171,7 +171,7 @@ it("syncs active subtitle and stops video at the selected end", async () => {
   expect(screen.getByTestId("letterbox-video-region")).toHaveAttribute("data-height", "0.48");
   expect(screen.getByTestId("video-area-guide")).toBeInTheDocument();
   expect(screen.getByTestId("active-subtitle")).toHaveClass("template-subtitle");
-  expect(screen.getByTestId("active-subtitle")).toHaveAttribute("data-font-key", "korean_myeongjo_v1");
+  expect(screen.getByTestId("active-subtitle")).toHaveAttribute("data-font-key", "korean_gothic_v1");
   expect(await screen.findByTestId("template-title")).toHaveAttribute("data-font-key", "pretendard_black_v1");
   expect(Number.parseFloat(screen.getByTestId("template-title-bounds").style.top)).toBeLessThan(Number.parseFloat(screen.getByTestId("letterbox-video-region").style.top));
   expect(Number.parseFloat(screen.getByTestId("active-subtitle").style.top)).toBeLessThan(Number.parseFloat(screen.getByTestId("letterbox-video-region").style.top));
@@ -328,6 +328,7 @@ it("shows the new draft defaults and the 22 to 34 percent video-area range", () 
   expect(screen.getByRole("button", { name: "1.2x" })).toHaveAttribute("aria-pressed", "true");
   expect(screen.getByLabelText("자막 글자 크기")).toHaveValue("1");
   expect(screen.getByLabelText("자막 위치")).toHaveValue("0.24");
+  expect(screen.getByLabelText("자막 위치")).toHaveAttribute("max", "0.790625");
 });
 
 it("updates title and visual sliders with exact template values", () => {

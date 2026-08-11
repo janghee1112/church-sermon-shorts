@@ -213,7 +213,7 @@ def test_visual_settings_save_validate_and_persist(client, db_session):
         "title_font_scale": 0.69,
         "title_position_y": 0.29,
         "subtitle_font_scale": 1.51,
-        "subtitle_position_y": 0.51,
+        "subtitle_position_y": 0.8,
     }
     for field, value in invalid_values.items():
         rejected = client.patch(f"/api/drafts/{draft_id}", json={field: value})
