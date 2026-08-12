@@ -100,6 +100,11 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def resolve_storage(self) -> "Settings":
+        # sermon_letterbox_v1 uses the bundled Nanum Gothic font for subtitles.
+        # Keep stale deployment/local SUBTITLE_FONT_* overrides from bringing
+        # the old Myeongjo font back into previews or rendered MP4 files.
+        self.subtitle_font_path = PROJECT_ROOT / "backend" / "assets" / "fonts" / "NanumGothic-Bold.ttf"
+        self.subtitle_font_name = "NanumGothic"
         data_dir = self.data_dir if self.data_dir.is_absolute() else (PROJECT_ROOT / self.data_dir).resolve()
         self.data_dir = data_dir
         self.upload_dir = self._storage_path(self.upload_dir, data_dir / "uploads")

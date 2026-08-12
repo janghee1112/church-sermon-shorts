@@ -42,6 +42,17 @@ def test_data_dir_derives_persistent_storage_paths(tmp_path):
     assert settings.database_url == f"sqlite:///{tmp_path / 'sermon_shorts.db'}"
 
 
+def test_subtitle_font_is_always_the_bundled_gothic_font(tmp_path):
+    settings = Settings(
+        _env_file=None,
+        data_dir=tmp_path,
+        subtitle_font_path="./backend/assets/fonts/NanumMyeongjo-Regular.ttf",
+        subtitle_font_name="NanumMyeongjo",
+    )
+    assert settings.subtitle_font_path.name == "NanumGothic-Bold.ttf"
+    assert settings.subtitle_font_name == "NanumGothic"
+
+
 def stored_segments(count: int = 24) -> list[StoredTranscriptSegmentData]:
     return [
         StoredTranscriptSegmentData(
