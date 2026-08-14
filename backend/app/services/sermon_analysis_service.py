@@ -10,6 +10,7 @@ from app.schemas.analysis import (
     AnalysisCandidate,
     AnalysisScores,
     AnalysisTitle,
+    CandidateTitleResult,
     CandidateDiscoveryResult,
     SermonAnalysisResult,
     StoredTranscriptSegmentData,
@@ -85,10 +86,63 @@ context_integrity가 false인 후보는 절대 추천하지 마세요. AI가 새
 
 전체 timestamped transcript:
 {timestamped_transcript}"""
-        return self._request_structured(
+        scored = self._request_structured(
             scoring_prompt,
             SermonAnalysisResult,
             "잠재 후보의 초반 훅·일반인 공감·완결성과 맥락을 검증하는 Shorts 평가자",
+        )
+        selected = normalize_and_select_candidates(scored, segments, duration_seconds, limit=4)
+        ordered_segments = sorted(segments, key=lambda segment: segment.segment_order)
+        segment_index_by_id = {segment.segment_id: index for index, segment in enumerate(ordered_segments)}
+        title_payload = json.dumps(
+            [
+                {
+                    "start_segment_id": item.start_segment_id,
+                    "end_segment_id": item.end_segment_id,
+                    "segments": [
+                        {
+                            "segment_id": segment.segment_id,
+                            "start_sec": segment.start_sec,
+                            "end_sec": segment.end_sec,
+                            "text": segment.text,
+                        }
+                        for segment in ordered_segments[
+                            segment_index_by_id[item.start_segment_id]:segment_index_by_id[item.end_segment_id] + 1
+                        ]
+                    ],
+                }
+                for item in selected
+            ],
+            ensure_ascii=False,
+        )
+        title_prompt = f"""최종 쇼츠 후보 4개에 대해 제목을 각 3개씩 생성하세요.
+제목은 실제 대본의 의미와 일치하는 짧은 한국어 문장이어야 하며 질문형·감정형·통념깨기형처럼 유형을 서로 다르게 하세요.
+본문에 없는 발언을 직접 인용처럼 만들거나 과장된 clickbait(99%, 당신은 속고 있습니다 등)를 쓰지 마세요.
+반드시 입력된 start_segment_id/end_segment_id를 그대로 반환하세요.
+입력된 segments의 실제 대사를 수정하거나 요약해 transcript로 반환하지 마세요.
+
+최종 후보 원문 세그먼트:
+{title_payload}"""
+        title_result = self._request_structured(
+            title_prompt,
+            CandidateTitleResult,
+            "최종 4개 후보의 실제 내용에 근거한 정직한 Shorts 제목 편집자",
+        )
+        titles_by_range = {
+            (item.start_segment_id, item.end_segment_id): item.titles
+            for item in title_result.candidates
+        }
+        final_candidates: List[AnalysisCandidate] = []
+        for item in selected:
+            titles = titles_by_range.get((item.start_segment_id, item.end_segment_id))
+            if not titles:
+                raise SermonAnalysisError("최종 후보 제목 응답을 검증하지 못했습니다. 잠시 후 다시 시도해 주세요.")
+            item.analysis.titles = titles
+            final_candidates.append(item.analysis)
+        return SermonAnalysisResult(
+            sermon_summary=scored.sermon_summary,
+            sermon_topics=scored.sermon_topics,
+            candidates=final_candidates,
         )
 
     def _request_structured(self, prompt: str, response_model: type, system_message: str):

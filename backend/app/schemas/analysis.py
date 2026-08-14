@@ -97,7 +97,7 @@ class AnalysisCandidate(BaseModel):
     recommendation_type: str = "핵심 메시지"
     selection_reason: str
     scores: AnalysisScores
-    titles: List[AnalysisTitle] = Field(min_length=3, max_length=3)
+    titles: List[AnalysisTitle] = Field(default_factory=list, max_length=3)
     shorts_scores: ShortsEvaluationScores = Field(default_factory=ShortsEvaluationScores)
     shorts_score: Optional[int] = Field(default=None, ge=0, le=100)
     opening_3s_score: int = Field(default=0, ge=0, le=100)
@@ -167,6 +167,16 @@ class CandidateDiscovery(BaseModel):
 
 class CandidateDiscoveryResult(BaseModel):
     candidates: List[CandidateDiscovery] = Field(min_length=8, max_length=15)
+
+
+class CandidateTitleSet(BaseModel):
+    start_segment_id: int = Field(gt=0)
+    end_segment_id: int = Field(gt=0)
+    titles: List[AnalysisTitle] = Field(min_length=3, max_length=3)
+
+
+class CandidateTitleResult(BaseModel):
+    candidates: List[CandidateTitleSet] = Field(min_length=4, max_length=4)
 
 
 class SermonAnalysisResult(BaseModel):

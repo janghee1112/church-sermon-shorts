@@ -16,6 +16,8 @@ from app.schemas.analysis import (
     AnalysisTitle,
     CandidateDiscovery,
     CandidateDiscoveryResult,
+    CandidateTitleResult,
+    CandidateTitleSet,
     SermonAnalysisResult,
     StoredTranscriptSegmentData,
     TranscriptionResult,
@@ -237,13 +239,25 @@ def test_openai_analysis_uses_discovery_then_scoring_and_never_requests_transcri
         sermon_topics=["믿음"],
         candidates=[make_candidate(index) for index in range(4)],
     )
+    titles = CandidateTitleResult(candidates=[
+        CandidateTitleSet(
+            start_segment_id=index * 6 + 1,
+            end_segment_id=index * 6 + 6,
+            titles=[
+                AnalysisTitle(title=f"제목 {index}-{order}", type="질문형")
+                for order in range(3)
+            ],
+        )
+        for index in range(4)
+    ])
     service.client.beta.chat.completions.parse = MagicMock(side_effect=[
         SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(parsed=discovery))]),
         SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(parsed=scored))]),
+        SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(parsed=titles))]),
     ])
     result = service.analyze(stored_segments(24), 240)
     assert result.sermon_summary == "요약"
-    assert service.client.beta.chat.completions.parse.call_count == 2
+    assert service.client.beta.chat.completions.parse.call_count == 3
     first_prompt = service.client.beta.chat.completions.parse.call_args_list[0].kwargs["messages"][1]["content"]
     second_prompt = service.client.beta.chat.completions.parse.call_args_list[1].kwargs["messages"][1]["content"]
     assert "10~15개" in first_prompt
@@ -251,6 +265,9 @@ def test_openai_analysis_uses_discovery_then_scoring_and_never_requests_transcri
     assert "transcript/exact_transcript" in first_prompt
     assert "transcript/exact_transcript" in second_prompt
     assert "실제 시작 문장" in second_prompt
+    title_prompt = service.client.beta.chat.completions.parse.call_args_list[2].kwargs["messages"][1]["content"]
+    assert "최종 쇼츠 후보 4개" in title_prompt
+    assert "제목" in title_prompt
 
 
 def test_context_integrity_gate_and_shorts_first_ranking():
