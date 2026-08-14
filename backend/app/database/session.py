@@ -57,6 +57,7 @@ def _add_mvp_columns(target_engine: Engine = engine) -> None:
             "start_segment_id": "INTEGER",
             "end_segment_id": "INTEGER",
             "segment_count": "INTEGER NOT NULL DEFAULT 0",
+            "analysis_metadata": "TEXT NOT NULL DEFAULT '{}'",
         },
         "clip_drafts": {
             "title_highlight_text": "VARCHAR(500) NOT NULL DEFAULT ''",

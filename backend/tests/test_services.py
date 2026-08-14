@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Optional
@@ -13,6 +14,8 @@ from app.schemas.analysis import (
     AnalysisCandidate,
     AnalysisScores,
     AnalysisTitle,
+    CandidateDiscovery,
+    CandidateDiscoveryResult,
     SermonAnalysisResult,
     StoredTranscriptSegmentData,
     TranscriptionResult,
@@ -136,6 +139,7 @@ def test_candidate_transcript_ignores_ai_text_and_joins_database_verbatim(db_ses
     assert saved.start_segment_id == rows[0].id
     assert saved.end_segment_id == rows[-1].id
     assert saved.segment_count == 3
+    assert json.loads(saved.analysis_metadata)["context_integrity"] is True
 
 
 def test_empty_real_transcription_fails_before_candidate_analysis(db_session, tmp_path):
@@ -212,3 +216,113 @@ def test_openai_analysis_retries_once_and_fails_safely():
     with pytest.raises(SermonAnalysisError, match="검증하지 못했습니다"):
         service.analyze(stored_segments(6), 60)
     assert service.client.beta.chat.completions.parse.call_count == 2
+
+
+def test_openai_analysis_uses_discovery_then_scoring_and_never_requests_transcript_text():
+    service = OpenAISermonAnalysisService("test-key", "gpt-4.1-mini")
+    discovery = CandidateDiscoveryResult(candidates=[
+        CandidateDiscovery(
+            start_segment_id=index * 2 + 1,
+            end_segment_id=index * 2 + 2,
+            core_theme=f"주제 {index}",
+            raw_opening_sentence="실제 시작 문장",
+            emotional_triggers=["hope"],
+            hook_type="질문형",
+            expected_payoff="명확한 결론",
+        )
+        for index in range(8)
+    ])
+    scored = SermonAnalysisResult(
+        sermon_summary="요약",
+        sermon_topics=["믿음"],
+        candidates=[make_candidate(index) for index in range(4)],
+    )
+    service.client.beta.chat.completions.parse = MagicMock(side_effect=[
+        SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(parsed=discovery))]),
+        SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(parsed=scored))]),
+    ])
+    result = service.analyze(stored_segments(24), 240)
+    assert result.sermon_summary == "요약"
+    assert service.client.beta.chat.completions.parse.call_count == 2
+    first_prompt = service.client.beta.chat.completions.parse.call_args_list[0].kwargs["messages"][1]["content"]
+    second_prompt = service.client.beta.chat.completions.parse.call_args_list[1].kwargs["messages"][1]["content"]
+    assert "10~15개" in first_prompt
+    assert "hook_strength 25" in second_prompt
+    assert "transcript/exact_transcript" in first_prompt
+    assert "transcript/exact_transcript" in second_prompt
+    assert "실제 시작 문장" in second_prompt
+
+
+def test_context_integrity_gate_and_shorts_first_ranking():
+    segments = stored_segments(16)
+    weak = make_candidate(0)
+    weak.opening_3s_score = 35
+    weak.scroll_stop_score = 30
+    weak.main_topic = "같은 주제"
+    strong = make_candidate(1)
+    strong.opening_3s_score = 96
+    strong.scroll_stop_score = 94
+    strong.shorts_scores = {
+        "hook_strength": 84,
+        "universal_relevance": 86,
+        "curiosity_gap": 82,
+        "payoff_strength": 85,
+        "standalone_clarity": 88,
+        "emotional_intensity": 80,
+        "brevity_efficiency": 90,
+    }
+    strong.main_topic = "다른 주제"
+    rejected = make_candidate(2)
+    rejected.context_integrity = False
+    result = SermonAnalysisResult(
+        sermon_summary="요약",
+        sermon_topics=["믿음"],
+        candidates=[weak, strong, rejected, make_candidate(3)],
+    )
+    selected = normalize_and_select_candidates(result, segments, 160, limit=2)
+    assert len(selected) == 2
+    assert all(item.analysis.context_integrity for item in selected)
+    assert max(item.analysis.opening_3s_score for item in selected) == 96
+
+
+def test_new_shorts_metrics_are_accepted_inside_scores_object():
+    candidate = make_candidate(0)
+    candidate.shorts_scores = {}
+    candidate.scores.hook_strength = 90
+    candidate.scores.universal_relevance = 80
+    candidate.scores.curiosity_gap = 70
+    candidate.scores.payoff_strength = 60
+    candidate.scores.standalone_clarity = 50
+    candidate.scores.emotional_intensity = 40
+    candidate.scores.brevity_efficiency = 30
+    assert candidate.shorts_score_value() == round(90 * .25 + 80 * .2 + 70 * .15 + 60 * .15 + 50 * .1 + 40 * .1 + 30 * .05)
+
+
+def test_short_clip_bounds_allow_20_seconds_without_padding_to_30():
+    segments = [
+        StoredTranscriptSegmentData(segment_id=index + 1, segment_order=index, start_sec=index * 10, end_sec=(index + 1) * 10, text=f"문장 {index}")
+        for index in range(12)
+    ]
+    candidates = [make_candidate(index) for index in range(4)]
+    for index, candidate in enumerate(candidates):
+        candidate.start_segment_id = index * 3 + 1
+        candidate.end_segment_id = index * 3 + 2
+    result = SermonAnalysisResult(sermon_summary="요약", sermon_topics=["믿음"], candidates=candidates)
+    selected = normalize_and_select_candidates(result, segments, 120)
+    assert len(selected) == 4
+    assert all(20 <= item.end_sec - item.start_sec <= 75 for item in selected)
+
+
+def test_generic_opening_is_trimmed_only_at_a_real_segment_boundary():
+    segments = [
+        StoredTranscriptSegmentData(segment_id=1, segment_order=0, start_sec=0, end_sec=10, text="사랑하는 성도 여러분"),
+        StoredTranscriptSegmentData(segment_id=2, segment_order=1, start_sec=10, end_sec=30, text="왜 우리는 남이 잘되면 불편할까요?"),
+        StoredTranscriptSegmentData(segment_id=3, segment_order=2, start_sec=30, end_sec=50, text="그 이유를 믿음 안에서 살펴봅니다."),
+    ]
+    candidate = make_candidate(0)
+    candidate.start_segment_id = 1
+    candidate.end_segment_id = 3
+    result = SermonAnalysisResult(sermon_summary="요약", sermon_topics=["비교"], candidates=[candidate] * 4)
+    selected = normalize_and_select_candidates(result, segments, 50, limit=1)
+    assert selected[0].start_segment_id == 2
+    assert selected[0].start_sec == 10

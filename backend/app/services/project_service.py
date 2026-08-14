@@ -259,6 +259,32 @@ def _replace_candidates(
             raise SermonAnalysisError("후보 시간이 영상 범위 밖이거나 서로 겹칩니다.")
         transcript = " ".join(row.text for row in segment_rows)
         item = selected_item.analysis
+        shorts_scores = item.shorts_evaluation_scores()
+        shorts_score = item.shorts_score_value()
+        centrality_score = shorts_scores.universal_relevance or item.scores.centrality
+        standalone_score = shorts_scores.standalone_clarity or item.scores.standalone
+        hook_score = item.opening_3s_score or shorts_scores.hook_strength or item.scores.hook
+        emotional_score = shorts_scores.emotional_intensity or item.scores.emotional_impact
+        metadata = {
+            "shorts_score": shorts_score,
+            "hook_strength": shorts_scores.hook_strength or item.scores.hook,
+            "universal_relevance": shorts_scores.universal_relevance or item.scores.centrality,
+            "curiosity_gap": shorts_scores.curiosity_gap or item.scores.hook,
+            "payoff_strength": shorts_scores.payoff_strength or item.scores.standalone,
+            "standalone_clarity": shorts_scores.standalone_clarity or item.scores.standalone,
+            "emotional_intensity": shorts_scores.emotional_intensity or item.scores.emotional_impact,
+            "brevity_efficiency": shorts_scores.brevity_efficiency or 75,
+            "opening_3s_score": item.opening_3s_score or item.scores.hook,
+            "scroll_stop_score": item.scroll_stop_score or item.scores.hook,
+            "non_christian_clarity_score": item.non_christian_clarity_score or item.scores.standalone,
+            "title_potential_score": item.title_potential_score or item.scores.hook,
+            "information_density_score": item.information_density_score or 75,
+            "context_integrity": item.context_integrity,
+            "emotional_triggers": item.emotional_triggers,
+            "core_theme": item.core_theme or item.main_topic,
+            "raw_opening_sentence": item.raw_opening_sentence or segment_rows[0].text,
+            "expected_payoff": item.expected_payoff or "",
+        }
         candidate = ClipCandidate(
             project_id=project.id,
             candidate_order=order,
@@ -272,11 +298,12 @@ def _replace_candidates(
             transcript=transcript,
             main_topic=item.main_topic,
             selection_reason=item.selection_reason,
-            centrality_score=item.scores.centrality,
-            standalone_score=item.scores.standalone,
-            hook_score=item.scores.hook,
-            emotional_score=item.scores.emotional_impact,
-            overall_score=item.scores.overall,
+            centrality_score=centrality_score,
+            standalone_score=standalone_score,
+            hook_score=hook_score,
+            emotional_score=emotional_score,
+            overall_score=shorts_score,
+            analysis_metadata=json.dumps(metadata, ensure_ascii=False),
         )
         db.add(candidate)
         db.flush()

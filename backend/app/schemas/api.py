@@ -73,6 +73,13 @@ class CandidateResponse(BaseModel):
     selection_reason: str
     scores: ScoresResponse
     titles: List[TitleResponse]
+    shorts_score: int = 0
+    opening_3s_score: int = 0
+    scroll_stop_score: int = 0
+    non_christian_clarity_score: int = 0
+    emotional_triggers: List[str] = Field(default_factory=list)
+    context_integrity: bool = True
+    core_theme: Optional[str] = None
 
 
 class CandidateDebugResponse(BaseModel):
@@ -80,6 +87,22 @@ class CandidateDebugResponse(BaseModel):
     start_segment_id: Optional[int] = None
     end_segment_id: Optional[int] = None
     segment_count: int
+    shorts_score: int = 0
+    hook_strength: int = 0
+    universal_relevance: int = 0
+    curiosity_gap: int = 0
+    payoff_strength: int = 0
+    standalone_clarity: int = 0
+    emotional_intensity: int = 0
+    brevity_efficiency: int = 0
+    opening_3s_score: int = 0
+    scroll_stop_score: int = 0
+    non_christian_clarity_score: int = 0
+    title_potential_score: int = 0
+    information_density_score: int = 0
+    context_integrity: bool = True
+    emotional_triggers: List[str] = Field(default_factory=list)
+    core_theme: Optional[str] = None
 
 
 class TranscriptBoundaryDebugResponse(BaseModel):

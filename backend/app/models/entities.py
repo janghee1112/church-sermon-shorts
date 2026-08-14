@@ -124,6 +124,7 @@ class ClipCandidate(Base):
     hook_score: Mapped[int] = mapped_column(Integer)
     emotional_score: Mapped[int] = mapped_column(Integer)
     overall_score: Mapped[int] = mapped_column(Integer)
+    analysis_metadata: Mapped[str] = mapped_column(Text, default="{}", server_default="{}")
 
     project: Mapped[Project] = relationship(back_populates="candidates")
     titles: Mapped[List["CandidateTitle"]] = relationship(cascade="all, delete-orphan", back_populates="candidate")
