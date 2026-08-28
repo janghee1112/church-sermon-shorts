@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 class SubtitleLayoutPreviewRequest(BaseModel):
     text: str = Field(min_length=1, max_length=5000)
-    subtitle_font_scale: float = Field(default=1.0, ge=0.7, le=1.5)
+    subtitle_font_scale: float = Field(default=0.9, ge=0.7, le=1.5)
 
 
 class SubtitleLayoutPreviewResponse(BaseModel):

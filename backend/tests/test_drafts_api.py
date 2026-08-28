@@ -69,20 +69,36 @@ def test_create_is_idempotent_and_uses_candidate_boundaries(client, db_session):
     assert generated_words == source_words
     assert payload["zoom_scale"] == 1.30
     assert payload["crop_position_x"] == 0.5
-    assert payload["crop_position_y"] == 0.42
+    assert payload["crop_position_y"] == 0.70
     assert payload["video_area_position_y"] == 0.28
     assert payload["video_area_height"] == 0.48
     assert payload["title_highlight_text"] == ""
     assert payload["title_highlight_ranges"] == []
-    assert payload["title_font_scale"] == 1.20
+    assert payload["title_font_scale"] == 1.00
     assert payload["title_position_y"] == 0.08
-    assert payload["subtitle_font_scale"] == 1.0
-    assert payload["subtitle_position_y"] == 0.24
+    assert payload["subtitle_font_scale"] == 0.90
+    assert payload["subtitle_position_y"] == 0.52
     assert payload["playback_rate"] == 1.20
     assert "background_darkness" not in payload
     assert "subject_brightness" not in payload
     assert "subject_mask_enabled" not in payload
     assert payload["template_type"] == "sermon_letterbox_v1"
+
+
+def test_existing_draft_values_are_preserved_after_new_defaults_change(client, db_session):
+    project, candidate, _ = seed_draft_source(db_session)
+    created = create_draft(client, project, candidate).json()
+    legacy_values = {
+        "title_font_scale": 1.2,
+        "crop_position_y": 0.42,
+        "subtitle_font_scale": 1.0,
+        "subtitle_position_y": 0.24,
+    }
+    updated = client.patch(f"/api/drafts/{created['id']}", json=legacy_values)
+    assert updated.status_code == 200
+    loaded = client.get(f"/api/drafts/{created['id']}").json()
+    for key, value in legacy_values.items():
+        assert loaded[key] == value
 
 
 def test_selected_recommended_title_becomes_draft_title(client, db_session):

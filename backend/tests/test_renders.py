@@ -19,6 +19,7 @@ from app.services.render_service import (
     recover_stalled_render_jobs,
     validate_rendered_file,
 )
+from app.services.render_timing import calculate_fade_window, calculate_output_duration
 from app.services.subtitle_renderer import build_relative_cues, render_subtitle_timeline
 from app.services.title_renderer import TITLE_LETTER_SPACING_EM, calculate_title_layout, render_title_png
 from app.services.storage_service import StorageObjectMetadata
@@ -81,6 +82,9 @@ def test_render_job_snapshot_duplicate_and_version(db_session, sample_video):
     assert snapshot["banner"]["width_ratio"] == 0.368
     assert snapshot["banner"]["position_x"] == 0.5
     assert snapshot["banner"]["position_y"] == 0.790625
+    assert snapshot["fade_out_enabled"] is True
+    assert snapshot["video_fade_duration"] == 1.0
+    assert snapshot["audio_fade_duration"] == 0.8
     assert snapshot["video_area_position_y"] == 0.34
     assert snapshot["title_position_y"] == 0.11
     assert snapshot["subtitle_position_y"] == 0.25
@@ -101,24 +105,24 @@ def test_render_snapshot_uses_new_letterbox_defaults(db_session, sample_video):
     draft = seed_renderable_draft(db_session, sample_video)
     draft.zoom_scale = 1.30
     draft.crop_position_x = 0.50
-    draft.crop_position_y = 0.42
+    draft.crop_position_y = 0.70
     draft.video_area_position_y = 0.28
-    draft.title_font_scale = 1.20
+    draft.title_font_scale = 1.00
     draft.title_position_y = 0.08
-    draft.subtitle_font_scale = 1.00
-    draft.subtitle_position_y = 0.24
+    draft.subtitle_font_scale = 0.90
+    draft.subtitle_position_y = 0.52
     draft.playback_rate = 1.20
     db_session.commit()
     job, _ = create_render_job(db_session, draft.id)
     snapshot = json.loads(job.settings_snapshot)
     assert snapshot["zoom_scale"] == 1.30
     assert snapshot["crop_position_x"] == 0.50
-    assert snapshot["crop_position_y"] == 0.42
+    assert snapshot["crop_position_y"] == 0.70
     assert snapshot["video_area_position_y"] == 0.28
-    assert snapshot["title_font_scale"] == 1.20
+    assert snapshot["title_font_scale"] == 1.00
     assert snapshot["title_position_y"] == 0.08
-    assert snapshot["subtitle_font_scale"] == 1.00
-    assert snapshot["subtitle_position_y"] == 0.24
+    assert snapshot["subtitle_font_scale"] == 0.90
+    assert snapshot["subtitle_position_y"] == 0.52
     assert snapshot["playback_rate"] == 1.20
     assert snapshot["banner"]["width_ratio"] == 0.368
     assert snapshot["banner"]["position_y"] == 0.790625
@@ -162,15 +166,21 @@ def test_new_draft_defaults_render_an_actual_mp4(db_session, sample_video):
         "title_font_scale": snapshot["title_font_scale"],
         "subtitle_font_scale": snapshot["subtitle_font_scale"],
         "subtitle_position_y": snapshot["subtitle_position_y"],
+        "fade_out_enabled": snapshot["fade_out_enabled"],
+        "video_fade_duration": snapshot["video_fade_duration"],
+        "audio_fade_duration": snapshot["audio_fade_duration"],
     } == {
         "zoom_scale": 1.30,
         "crop_position_x": 0.50,
-        "crop_position_y": 0.42,
+        "crop_position_y": 0.70,
         "video_area_position_y": 0.28,
         "playback_rate": 1.20,
-        "title_font_scale": 1.20,
-        "subtitle_font_scale": 1.00,
-        "subtitle_position_y": 0.24,
+        "title_font_scale": 1.00,
+        "subtitle_font_scale": 0.90,
+        "subtitle_position_y": 0.52,
+        "fade_out_enabled": True,
+        "video_fade_duration": 1.0,
+        "audio_fade_duration": 0.8,
     }
     assert job.status == "completed", job.error_message
     assert Path(job.output_file_path).is_file()
@@ -255,7 +265,7 @@ def test_ffmpeg_command_applies_matching_video_and_audio_speed(tmp_path):
     graph = command[command.index("-filter_complex") + 1]
     assert "setpts=(PTS-STARTPTS)/1.200000" in graph
     assert "d=50.000" in graph
-    assert command[command.index("-af") + 1] == "atempo=1.200000,asetpts=PTS-STARTPTS"
+    assert command[command.index("-af") + 1] == "atempo=1.200000,asetpts=PTS-STARTPTS,afade=t=out:st=49.200000:d=0.800000"
     output_limit_index = command.index("-t", command.index("-af"))
     assert command[output_limit_index + 1] == "50.000"
 
@@ -274,6 +284,72 @@ def test_ffmpeg_command_uses_one_composited_overlay_timeline(tmp_path):
     assert command.count("-i") == 2
     assert command[command.index("-f") + 1] == "concat"
     assert command[command.index("-threads") + 1] == "1"
+
+
+@pytest.mark.parametrize(
+    ("playback_rate", "expected_duration", "expected_video_start", "expected_audio_start"),
+    [
+        (1.0, 55.0, 54.0, 54.2),
+        (1.1, 50.0, 49.0, 49.2),
+        (1.2, 55 / 1.2, 55 / 1.2 - 1.0, 55 / 1.2 - 0.8),
+    ],
+)
+def test_fade_timing_uses_final_output_timeline(
+    tmp_path, playback_rate, expected_duration, expected_video_start, expected_audio_start
+):
+    duration = 55.0
+    output_duration = calculate_output_duration(duration, playback_rate)
+    video_start, video_duration = calculate_fade_window(output_duration, 1.0)
+    audio_start, audio_duration = calculate_fade_window(output_duration, 0.8)
+    assert output_duration == pytest.approx(expected_duration)
+    assert video_start == pytest.approx(expected_video_start)
+    assert video_duration == pytest.approx(1.0)
+    assert audio_start == pytest.approx(expected_audio_start)
+    assert audio_duration == pytest.approx(0.8)
+
+    crop = calculate_render_crop(1920, 1080, 1080, 922, 1.12, 0.5, 0.5)
+    command = build_ffmpeg_command(
+        ffmpeg_binary="ffmpeg", source_path=tmp_path / "source.mp4",
+        overlay_manifest_path=tmp_path / "overlays.ffconcat",
+        temporary_output=tmp_path / "output.mp4", start_sec=0,
+        duration_sec=duration, playback_rate=playback_rate, canvas_width=1080,
+        canvas_height=1920, fps=30, crf=20, preset="medium", video_top=576,
+        video_height=922, crop=crop,
+    )
+    graph = command[command.index("-filter_complex") + 1]
+    assert f"fade=t=out:st={video_start:.6f}:d=1.000000:color=black" in graph
+    audio_filter = command[command.index("-af") + 1]
+    assert f"afade=t=out:st={audio_start:.6f}:d=0.800000" in audio_filter
+    assert command[command.index("-t", command.index("-af")) + 1] == f"{expected_duration:.3f}"
+
+
+def test_short_output_clamps_fade_duration_without_extending_output(tmp_path):
+    crop = calculate_render_crop(1920, 1080, 1080, 922, 1.12, 0.5, 0.5)
+    command = build_ffmpeg_command(
+        ffmpeg_binary="ffmpeg", source_path=tmp_path / "source.mp4",
+        overlay_manifest_path=tmp_path / "overlays.ffconcat", temporary_output=tmp_path / "output.mp4",
+        start_sec=0, duration_sec=0.7, playback_rate=1.0, canvas_width=1080,
+        canvas_height=1920, fps=30, crf=20, preset="medium", video_top=576,
+        video_height=922, crop=crop,
+    )
+    graph = command[command.index("-filter_complex") + 1]
+    assert "fade=t=out:st=0.000000:d=0.700000:color=black" in graph
+    assert "afade=t=out:st=0.000000:d=0.700000" in command[command.index("-af") + 1]
+    assert command[command.index("-t", command.index("-af")) + 1] == "0.700"
+
+
+def test_legacy_render_command_can_preserve_no_fade_snapshot(tmp_path):
+    crop = calculate_render_crop(1920, 1080, 1080, 922, 1.12, 0.5, 0.5)
+    command = build_ffmpeg_command(
+        ffmpeg_binary="ffmpeg", source_path=tmp_path / "source.mp4",
+        overlay_manifest_path=tmp_path / "overlays.ffconcat", temporary_output=tmp_path / "output.mp4",
+        start_sec=0, duration_sec=55, playback_rate=1.1, canvas_width=1080,
+        canvas_height=1920, fps=30, crf=20, preset="medium", video_top=576,
+        video_height=922, crop=crop, fade_out_enabled=False,
+    )
+    graph = command[command.index("-filter_complex") + 1]
+    assert "fade=t=out" not in graph
+    assert "afade=t=out" not in command[command.index("-af") + 1]
 
 
 def test_concat_subtitle_timeline_contains_cues_and_gaps(tmp_path):
@@ -313,7 +389,7 @@ def test_pretendard_black_is_the_same_frontend_and_backend_asset():
     assert settings.title_font_path.name == "Pretendard-Black.otf"
     assert frontend_font.is_file()
     assert hashlib.sha256(settings.title_font_path.read_bytes()).digest() == hashlib.sha256(frontend_font.read_bytes()).digest()
-    assert TITLE_LETTER_SPACING_EM == -0.03
+    assert TITLE_LETTER_SPACING_EM == -0.01
 
 
 def test_render_creation_rejects_missing_source_and_font(db_session, sample_video, tmp_path):
@@ -421,7 +497,7 @@ def test_canonical_title_layout_preserves_preview_lines(title, expected_lines, e
     layout = calculate_title_layout(title, settings.title_font_path, 1080, 1920, 1, 0.11)
     assert [line.text for line in layout.lines] == expected_lines
     assert layout.font_size_px == expected_size
-    assert layout.line_height_px == 91
+    assert layout.line_height_px == 94
     assert (layout.area.x, layout.area.y, layout.area.width, layout.area.height) == (76, 211, 929, 442)
     assert layout.auto_fit_applied is auto_fit
 
@@ -451,7 +527,7 @@ def test_title_layout_preview_api_returns_the_exact_canonical_image(client):
         "자족하려면 눈높이를", "낮추라고요?", "큰 오해입니다",
     ]
     assert payload["font_size_px"] == 84
-    assert payload["line_height_px"] == 91
+    assert payload["line_height_px"] == 94
     assert payload["auto_fit_applied"] is False
     assert payload["font_key"] == "pretendard_black_v1"
     assert payload["font_name"] == "Pretendard Black"
@@ -526,6 +602,7 @@ def test_real_ffmpeg_render_stream_range_and_download(client, db_session, sample
     draft.video_area_position_y = 0.30
     draft.title_position_y = 0.08
     draft.subtitle_position_y = 0.21
+    draft.playback_rate = 1.0
     db_session.commit()
     job, _ = create_render_job(db_session, draft.id)
     process_render_job(db_session, job.id)
@@ -536,8 +613,13 @@ def test_real_ffmpeg_render_stream_range_and_download(client, db_session, sample
     assert job.output_height == 1920
     rendered_frame = tmp_path / "rendered-frame.png"
     subprocess.run([
-        "ffmpeg", "-nostdin", "-y", "-v", "error", "-ss", "0.6", "-i", job.output_file_path,
+        "ffmpeg", "-nostdin", "-y", "-v", "error", "-ss", "0.1", "-i", job.output_file_path,
         "-frames:v", "1", str(rendered_frame),
+    ], check=True)
+    final_frame = tmp_path / "final-frame.png"
+    subprocess.run([
+        "ffmpeg", "-nostdin", "-y", "-v", "error", "-sseof", "-0.1", "-i", job.output_file_path,
+        "-frames:v", "1", str(final_frame),
     ], check=True)
     banner_source = inspect_banner_asset(get_template_banner("sermon_letterbox_v1"))
     layout = calculate_banner_layout(1080, 1920, *banner_source, 0.368, 0.5, 0.790625)
@@ -548,10 +630,13 @@ def test_real_ffmpeg_render_stream_range_and_download(client, db_session, sample
         title_region = frame.crop((0, 130, 1080, 310))
         yellow_title_pixels = sum(1 for red, green, blue in title_region.getdata() if red > 150 and green > 120 and blue < 130)
         white_title_pixels = sum(1 for red, green, blue in title_region.getdata() if min(red, green, blue) > 160)
+    with Image.open(final_frame).convert("RGB") as frame:
+        final_frame_max = max(max(pixel) for pixel in frame.getdata())
     assert non_black > 1_000
     assert max(transparent_corner) < 10
     assert yellow_title_pixels > 100
     assert white_title_pixels > 100
+    assert final_frame_max < 40
     full = client.get(f"/api/renders/{job.id}/video")
     partial = client.get(f"/api/renders/{job.id}/video", headers={"Range": "bytes=0-99"})
     download = client.get(f"/api/renders/{job.id}/download")

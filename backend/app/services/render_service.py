@@ -21,6 +21,11 @@ from app.services.ffmpeg_filter_builder import build_ffmpeg_command
 from app.services.render_crop import calculate_render_crop
 from app.services.render_assets import calculate_banner_layout, get_template_banner, inspect_banner_asset
 from app.services.render_file_service import safe_download_name
+from app.services.render_timing import (
+    DEFAULT_AUDIO_FADE_DURATION_SEC,
+    DEFAULT_VIDEO_FADE_DURATION_SEC,
+    calculate_output_duration,
+)
 from app.services.subtitle_renderer import build_relative_cues, render_subtitle_timeline
 from app.services.title_renderer import (
     TitleLayout,
@@ -114,12 +119,17 @@ def _build_snapshot(draft: ClipDraft, settings: Settings) -> dict[str, Any]:
         draft.title_font_scale,
         draft.title_position_y,
     )
+    source_duration = draft.end_sec - draft.start_sec
+    output_duration = calculate_output_duration(source_duration, draft.playback_rate)
     return {
         "start_sec": draft.start_sec,
         "end_sec": draft.end_sec,
-        "duration_sec": draft.end_sec - draft.start_sec,
+        "duration_sec": source_duration,
         "playback_rate": draft.playback_rate,
-        "output_duration_sec": (draft.end_sec - draft.start_sec) / draft.playback_rate,
+        "output_duration_sec": output_duration,
+        "fade_out_enabled": True,
+        "video_fade_duration": DEFAULT_VIDEO_FADE_DURATION_SEC,
+        "audio_fade_duration": DEFAULT_AUDIO_FADE_DURATION_SEC,
         "custom_title": draft.custom_title,
         "title_highlight_text": draft.title_highlight_text,
         "title_highlight_ranges": load_highlight_ranges(draft.custom_title, draft.title_highlight_ranges),
@@ -363,7 +373,15 @@ def process_render_job(db: Session, render_id: int) -> None:
         playback_rate = float(snapshot.get("playback_rate", 1.0))
         if not 0.75 <= playback_rate <= 1.5:
             raise RenderError("재생 속도가 올바르지 않습니다.", "invalid_playback_rate")
-        output_duration = float(snapshot.get("output_duration_sec", float(snapshot["duration_sec"]) / playback_rate))
+        output_duration = float(
+            snapshot.get(
+                "output_duration_sec",
+                calculate_output_duration(float(snapshot["duration_sec"]), playback_rate),
+            )
+        )
+        fade_out_enabled = bool(snapshot.get("fade_out_enabled", False))
+        video_fade_duration = float(snapshot.get("video_fade_duration", DEFAULT_VIDEO_FADE_DURATION_SEC))
+        audio_fade_duration = float(snapshot.get("audio_fade_duration", DEFAULT_AUDIO_FADE_DURATION_SEC))
         width = int(output["width"])
         height = int(output["height"])
         highlight_ranges = (
@@ -427,6 +445,9 @@ def process_render_job(db: Session, render_id: int) -> None:
             start_sec=float(snapshot["start_sec"]), duration_sec=float(snapshot["duration_sec"]), playback_rate=playback_rate,
             canvas_width=width, canvas_height=height, fps=int(output["fps"]), crf=int(output["crf"]),
             preset=str(output["preset"]), video_top=video_top, video_height=video_height, crop=crop,
+            fade_out_enabled=fade_out_enabled,
+            video_fade_duration=video_fade_duration,
+            audio_fade_duration=audio_fade_duration,
         )
         step = "encoding"
         _set_state(db, job, "rendering", 30, step)

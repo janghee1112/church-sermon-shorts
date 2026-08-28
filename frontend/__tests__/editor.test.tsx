@@ -11,7 +11,7 @@ import { ShortsEditorPage } from "@/components/editor/ShortsEditorPage";
 import { RenderPanel } from "@/components/editor/RenderPanel";
 import { createDraft, createRender, getDraft, getDraftRenders, getTitleLayoutPreview, getTranscript, saveDraftSubtitles, updateDraft } from "@/lib/api";
 import { calculateVerticalCrop } from "@/lib/verticalCrop";
-import { calculateLetterboxVideoArea, SERMON_LETTERBOX_TEMPLATE } from "@/lib/sermonTemplate";
+import { calculateLetterboxVideoArea, calculatePreviewFadeOpacity, SERMON_LETTERBOX_TEMPLATE } from "@/lib/sermonTemplate";
 import type { ClipDraft, DraftSubtitle, DraftVisualSettings, RenderJob, TitleLayoutPreview, Transcript, TranscriptSegment } from "@/types";
 import { createRef } from "react";
 
@@ -94,8 +94,8 @@ function titleLayoutFixture(title: string): TitleLayoutPreview {
     canvas_height: 1920,
     initial_font_size_px: 84,
     font_size_px: 84,
-    line_height_px: 91,
-    total_height_px: lines.length * 91,
+    line_height_px: 94,
+    total_height_px: lines.length * 94,
     auto_fit_applied: false,
     character_wrap_applied: false,
     area: { x: 76, y: 211, width: 929, height: 442 },
@@ -195,6 +195,28 @@ it("applies playback rate immediately while keeping original cue time comparison
   expect(screen.getByText(/예상 완성 길이 00:04 \(1.2x\)/)).toBeInTheDocument();
 });
 
+it("fades the entire preview on the final output second at each playback rate", () => {
+  expect(calculatePreviewFadeOpacity(54, 0, 55, 1.0)).toBe(0);
+  expect(calculatePreviewFadeOpacity(53.9, 0, 55, 1.1)).toBe(0);
+  expect(calculatePreviewFadeOpacity(54.45, 0, 55, 1.1)).toBeCloseTo(0.5);
+  expect(calculatePreviewFadeOpacity(55, 0, 55, 1.2)).toBe(1);
+
+  const accelerated = { ...visualSettings, playback_rate: 1.1 };
+  render(<VerticalVideoPreview projectId="p1" startSec={10} endSec={15} title="큰 제목" settings={accelerated} subtitles={subtitles} showSafeAreas onTimeChange={vi.fn()} />);
+  const video = screen.getByTestId("editor-video") as HTMLVideoElement;
+  const fade = screen.getByTestId("preview-fade-overlay");
+  expect(fade).toHaveStyle({ opacity: "0" });
+  video.currentTime = 14.45;
+  fireEvent.timeUpdate(video);
+  expect(Number.parseFloat(fade.getAttribute("style")?.match(/opacity:\s*([^;]+)/)?.[1] ?? "0")).toBeCloseTo(0.5);
+  video.currentTime = 15;
+  fireEvent.timeUpdate(video);
+  expect(fade).toHaveStyle({ opacity: "1" });
+  video.currentTime = 10;
+  fireEvent.seeked(video);
+  expect(fade).toHaveStyle({ opacity: "0" });
+});
+
 it("uses the canonical server title layout without browser re-wrapping", async () => {
   const title = "자족하려면 눈높이를\n낮추라고요?\n큰 오해입니다";
   const canonical = titleLayoutFixture(title);
@@ -204,7 +226,7 @@ it("uses the canonical server title layout without browser re-wrapping", async (
   expect(getTitleLayoutPreview).toHaveBeenCalledWith(title, 1, 0.11, visualSettings.title_highlight_ranges, expect.any(AbortSignal));
   expect(layer).toHaveAttribute("data-line-count", "3");
   expect(layer).toHaveAttribute("data-effective-font-size", "84");
-  expect(layer).toHaveAttribute("data-line-height", "91");
+  expect(layer).toHaveAttribute("data-line-height", "94");
   expect(layer).toHaveAttribute("src", canonical.image_data_url);
   expect(Number.parseFloat(screen.getByTestId("template-title-bounds").style.width)).toBeCloseTo((929 / 1080) * 100);
 });
@@ -287,7 +309,7 @@ it("removes video darkness and resets every video position value", async () => {
   expect(LETTERBOX_COMPOSITION_RESET).toEqual({
     zoom_scale: 1.3,
     crop_position_x: 0.5,
-    crop_position_y: 0.42,
+    crop_position_y: 0.70,
     video_area_position_y: 0.28,
     video_area_height: 0.48,
   });
@@ -300,16 +322,19 @@ it("removes video darkness and resets every video position value", async () => {
 it("uses the practical new-draft defaults without changing saved draft values", () => {
   expect(DEFAULT_TEMPLATE_SETTINGS.zoom_scale).toBe(1.3);
   expect(DEFAULT_TEMPLATE_SETTINGS.crop_position_x).toBe(0.5);
-  expect(DEFAULT_TEMPLATE_SETTINGS.crop_position_y).toBe(0.42);
+  expect(DEFAULT_TEMPLATE_SETTINGS.crop_position_y).toBe(0.70);
   expect(DEFAULT_TEMPLATE_SETTINGS.video_area_position_y).toBe(0.28);
   expect(DEFAULT_TEMPLATE_SETTINGS.playback_rate).toBe(1.2);
-  expect(DEFAULT_TEMPLATE_SETTINGS.title_font_scale).toBe(1.2);
-  expect(DEFAULT_TEMPLATE_SETTINGS.subtitle_font_scale).toBe(1);
+  expect(DEFAULT_TEMPLATE_SETTINGS.title_font_scale).toBe(1);
+  expect(DEFAULT_TEMPLATE_SETTINGS.subtitle_font_scale).toBe(0.9);
   expect(DEFAULT_TEMPLATE_SETTINGS.title_position_y).toBe(0.08);
-  expect(DEFAULT_TEMPLATE_SETTINGS.subtitle_position_y).toBe(0.24);
+  expect(DEFAULT_TEMPLATE_SETTINGS.subtitle_position_y).toBe(0.52);
   expect(SERMON_LETTERBOX_TEMPLATE.banner.positionY).toBe(0.790625);
   expect(SERMON_LETTERBOX_TEMPLATE.banner.widthRatio).toBe(0.368);
   expect(visualSettings.video_area_position_y).toBe(0.34);
+  expect(visualSettings.crop_position_y).toBe(0.5);
+  expect(visualSettings.title_font_scale).toBe(1);
+  expect(visualSettings.subtitle_font_scale).toBe(1);
   expect(visualSettings.title_position_y).toBe(0.11);
   expect(visualSettings.subtitle_position_y).toBe(0.25);
 });
@@ -317,19 +342,19 @@ it("uses the practical new-draft defaults without changing saved draft values", 
 it("shows the new draft defaults and the 22 to 34 percent video-area range", () => {
   const settings = { custom_title: "새 제목", ...DEFAULT_TEMPLATE_SETTINGS };
   render(<TemplateSettingsPanel settings={settings} currentSubtitle={subtitles[0]} showSafeAreas onShowSafeAreasChange={vi.fn()} onChange={vi.fn()} />);
-  expect(screen.getByLabelText("제목 글자 크기")).toHaveValue("1.2");
+  expect(screen.getByLabelText("제목 글자 크기")).toHaveValue("1");
   expect(screen.getByLabelText("제목 아래로 내리기")).toHaveValue("0.08");
   expect(screen.getByLabelText("제목 아래로 내리기")).toHaveAttribute("min", "0.08");
   expect(screen.getByLabelText("제목 아래로 내리기")).toHaveAttribute("max", "0.2");
   expect(screen.getByLabelText("영상 확대")).toHaveValue("1.3");
   expect(screen.getByLabelText("영상 가로 위치")).toHaveValue("0.5");
-  expect(screen.getByLabelText("영상 세로 위치")).toHaveValue("0.42");
+  expect(screen.getByLabelText("영상 세로 위치")).toHaveValue("0.7");
   expect(screen.getByLabelText("영상 영역 위아래 위치")).toHaveValue("0.28");
   expect(screen.getByLabelText("영상 영역 위아래 위치")).toHaveAttribute("min", "0.22");
   expect(screen.getByLabelText("영상 영역 위아래 위치")).toHaveAttribute("max", "0.34");
   expect(screen.getByRole("button", { name: "1.2x" })).toHaveAttribute("aria-pressed", "true");
-  expect(screen.getByLabelText("자막 글자 크기")).toHaveValue("1");
-  expect(screen.getByLabelText("자막 위치")).toHaveValue("0.24");
+  expect(screen.getByLabelText("자막 글자 크기")).toHaveValue("0.9");
+  expect(screen.getByLabelText("자막 위치")).toHaveValue("0.52");
   expect(screen.getByLabelText("자막 위치")).toHaveAttribute("max", "0.790625");
 });
 
@@ -428,7 +453,7 @@ it("applies the video position reset to the loaded editor state", async () => {
   await userEvent.click(screen.getByRole("button", { name: "영상 위치 초기화" }));
   expect(screen.getByLabelText("영상 확대")).toHaveValue("1.3");
   expect(screen.getByLabelText("영상 가로 위치")).toHaveValue("0.5");
-  expect(screen.getByLabelText("영상 세로 위치")).toHaveValue("0.42");
+  expect(screen.getByLabelText("영상 세로 위치")).toHaveValue("0.7");
   expect(screen.getByLabelText("영상 영역 위아래 위치")).toHaveValue("0.28");
   await waitFor(
     () => expect(updateDraft).toHaveBeenCalledWith(17, expect.objectContaining(LETTERBOX_COMPOSITION_RESET)),

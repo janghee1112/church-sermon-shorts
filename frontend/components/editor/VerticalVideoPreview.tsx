@@ -1,10 +1,10 @@
 "use client";
 
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type SyntheticEvent } from "react";
 import { formatTime } from "@/lib/time";
 import { getSubtitleLayoutPreview, getTitleLayoutPreview, videoUrl } from "@/lib/api";
 import { calculateVerticalCrop } from "@/lib/verticalCrop";
-import { calculateLetterboxVideoArea, SERMON_LETTERBOX_TEMPLATE } from "@/lib/sermonTemplate";
+import { calculateLetterboxVideoArea, calculatePreviewFadeOpacity, SERMON_LETTERBOX_TEMPLATE } from "@/lib/sermonTemplate";
 import type { DraftSubtitle, DraftVisualSettings, SubtitleLayoutPreview, TitleLayoutPreview } from "@/types";
 
 const PREVIEW_WIDTH = SERMON_LETTERBOX_TEMPLATE.previewWidth;
@@ -63,6 +63,12 @@ export const VerticalVideoPreview = forwardRef<VideoPreviewHandle, Props>(functi
   const subtitleLayoutCacheRef = useRef(new Map<string, SubtitleLayoutPreview>());
   const activeCue = subtitles.find((cue) => currentTime >= cue.start_sec - 0.05 && currentTime < cue.end_sec + 0.05);
   const activeText = activeCue ? activeCue.edited_text || activeCue.original_text : "";
+  const fadeOpacity = calculatePreviewFadeOpacity(
+    currentTime,
+    startSec,
+    endSec,
+    settings.playback_rate,
+  );
   const progress = Math.max(0, Math.min(100, ((currentTime - startSec) / Math.max(0.1, endSec - startSec)) * 100));
   const titleLayoutKey = JSON.stringify([
     title,
@@ -247,6 +253,13 @@ export const VerticalVideoPreview = forwardRef<VideoPreviewHandle, Props>(functi
     }
   }
 
+  function updateSeeked(event: SyntheticEvent<HTMLVideoElement>) {
+    const seconds = event.currentTarget.currentTime;
+    setCurrentTime(seconds);
+    onTimeChange(seconds);
+    drawFrame();
+  }
+
   function skip(seconds: number) {
     const video = videoRef.current;
     if (!video) return;
@@ -273,7 +286,7 @@ export const VerticalVideoPreview = forwardRef<VideoPreviewHandle, Props>(functi
           onPlay={() => setPlaying(true)}
           onPause={() => { setPlaying(false); drawFrame(); }}
           onLoadedData={(event) => { event.currentTarget.currentTime = startSec; applyPlaybackRate(event.currentTarget, settings.playback_rate); drawFrame(); }}
-          onSeeked={drawFrame}
+          onSeeked={updateSeeked}
           onError={() => setVideoError(true)}
         />
         {!originalRatio && <canvas ref={canvasRef} data-testid="composite-canvas" width={PREVIEW_WIDTH} height={PREVIEW_HEIGHT} className="h-full w-full" />}
@@ -333,6 +346,12 @@ export const VerticalVideoPreview = forwardRef<VideoPreviewHandle, Props>(functi
           {textOverlap && <div role="alert" className="absolute inset-x-4 top-1/2 z-30 rounded-lg bg-amber-500/90 px-3 py-2 text-center text-xs font-bold text-black">제목과 자막이 겹칠 수 있습니다.</div>}
           {subtitleVideoOverlap && <div role="alert" className="absolute inset-x-4 top-[84%] z-30 rounded-lg bg-amber-500/90 px-3 py-2 text-center text-xs font-bold text-black">대본이 영상 영역과 겹칠 수 있습니다.</div>}
         </>}
+        {!originalRatio && <div
+          data-testid="preview-fade-overlay"
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-[25] bg-black"
+          style={{ opacity: fadeOpacity }}
+        />}
         <div className="absolute inset-x-0 bottom-0 z-30 h-1.5 bg-white/25"><div className="h-full bg-gold" style={{ width: `${progress}%` }} /></div>
       </div>
       <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
