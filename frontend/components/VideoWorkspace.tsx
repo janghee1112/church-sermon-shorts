@@ -240,11 +240,7 @@ function DebugPanel({ debug }: { debug: NonNullable<CandidateResults["debug"]> }
       {debug.last_segment && <p className="mt-2">마지막 세그먼트 #{debug.last_segment.segment_id} · {formatTime(debug.last_segment.end_sec)} · {debug.last_segment.text}</p>}
       <ul className="mt-3 space-y-1">
         {debug.candidates.map((candidate) => (
-          <li key={candidate.candidate_order}>
-            <p>후보 {candidate.candidate_order}: #{candidate.start_segment_id} → #{candidate.end_segment_id} · {candidate.segment_count}개 · Shorts {candidate.shorts_score ?? "-"}</p>
-            <p className="mt-1 text-[11px]">훅 {candidate.hook_strength ?? "-"} · 일반 공감 {candidate.universal_relevance ?? "-"} · 궁금증 {candidate.curiosity_gap ?? "-"} · 결론 {candidate.payoff_strength ?? "-"} · 완결 {candidate.standalone_clarity ?? "-"} · 감정 {candidate.emotional_intensity ?? "-"} · 효율 {candidate.brevity_efficiency ?? "-"}</p>
-            <p className="mt-1 text-[11px]">첫 3초 {candidate.opening_3s_score ?? "-"} · 스크롤 정지 {candidate.scroll_stop_score ?? "-"} · 비기독교 이해 {candidate.non_christian_clarity_score ?? "-"} · 제목 가능성 {candidate.title_potential_score ?? "-"} · 밀도 {candidate.information_density_score ?? "-"} · 맥락 {candidate.context_integrity === false ? "fail" : "pass"}{candidate.emotional_triggers?.length ? ` · ${candidate.emotional_triggers.join(", ")}` : ""}</p>
-          </li>
+          <li key={candidate.candidate_order}>후보 {candidate.candidate_order}: #{candidate.start_segment_id} → #{candidate.end_segment_id} · {candidate.segment_count}개</li>
         ))}
       </ul>
     </details>

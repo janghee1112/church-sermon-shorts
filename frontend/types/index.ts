@@ -68,13 +68,6 @@ export interface Candidate {
     emotional_impact: number;
     overall: number;
   };
-  shorts_score?: number;
-  opening_3s_score?: number;
-  scroll_stop_score?: number;
-  non_christian_clarity_score?: number;
-  emotional_triggers?: string[];
-  context_integrity?: boolean;
-  core_theme?: string;
   titles: CandidateTitle[];
 }
 
@@ -99,22 +92,6 @@ export interface AnalysisDebug {
     start_segment_id: number | null;
     end_segment_id: number | null;
     segment_count: number;
-    shorts_score?: number;
-    hook_strength?: number;
-    universal_relevance?: number;
-    curiosity_gap?: number;
-    payoff_strength?: number;
-    standalone_clarity?: number;
-    emotional_intensity?: number;
-    brevity_efficiency?: number;
-    opening_3s_score?: number;
-    scroll_stop_score?: number;
-    non_christian_clarity_score?: number;
-    title_potential_score?: number;
-    information_density_score?: number;
-    context_integrity?: boolean;
-    emotional_triggers?: string[];
-    core_theme?: string | null;
   }>;
 }
 

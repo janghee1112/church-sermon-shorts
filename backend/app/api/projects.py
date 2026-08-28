@@ -171,7 +171,6 @@ def get_candidates(project_id: str, db: Session = Depends(get_db)) -> dict:
                     "emotional_impact": item.emotional_score,
                     "overall": item.overall_score,
                 },
-                **_candidate_metadata(item),
                 "titles": sorted(item.titles, key=lambda title: title.title_order),
             }
             for item in candidates
@@ -217,38 +216,9 @@ def _build_debug_payload(project: Project, candidates: list[ClipCandidate], db: 
                 "start_segment_id": item.start_segment_id,
                 "end_segment_id": item.end_segment_id,
                 "segment_count": item.segment_count,
-                **_candidate_metadata(item),
             }
             for item in candidates
         ],
-    }
-
-
-def _candidate_metadata(candidate: ClipCandidate) -> dict:
-    try:
-        metadata = json.loads(candidate.analysis_metadata or "{}")
-    except (TypeError, json.JSONDecodeError):
-        metadata = {}
-    context_integrity = metadata.get("context_integrity", True)
-    if isinstance(context_integrity, str):
-        context_integrity = context_integrity.strip().lower() not in {"false", "fail", "0", "no"}
-    return {
-        "shorts_score": int(metadata.get("shorts_score", candidate.overall_score or 0)),
-        "opening_3s_score": int(metadata.get("opening_3s_score", candidate.hook_score or 0)),
-        "scroll_stop_score": int(metadata.get("scroll_stop_score", candidate.hook_score or 0)),
-        "non_christian_clarity_score": int(metadata.get("non_christian_clarity_score", candidate.standalone_score or 0)),
-        "emotional_triggers": [str(value) for value in metadata.get("emotional_triggers", [])],
-        "context_integrity": bool(context_integrity),
-        "hook_strength": int(metadata.get("hook_strength", candidate.hook_score or 0)),
-        "universal_relevance": int(metadata.get("universal_relevance", candidate.centrality_score or 0)),
-        "curiosity_gap": int(metadata.get("curiosity_gap", candidate.hook_score or 0)),
-        "payoff_strength": int(metadata.get("payoff_strength", candidate.standalone_score or 0)),
-        "standalone_clarity": int(metadata.get("standalone_clarity", candidate.standalone_score or 0)),
-        "emotional_intensity": int(metadata.get("emotional_intensity", candidate.emotional_score or 0)),
-        "brevity_efficiency": int(metadata.get("brevity_efficiency", 0)),
-        "title_potential_score": int(metadata.get("title_potential_score", candidate.hook_score or 0)),
-        "information_density_score": int(metadata.get("information_density_score", 0)),
-        "core_theme": metadata.get("core_theme") or candidate.main_topic,
     }
 
 
