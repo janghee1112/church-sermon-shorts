@@ -1,0 +1,53 @@
+services:
+  - type: web
+    name: church-sermon-shorts
+    runtime: docker
+    plan: free
+    region: singapore
+    branch: main
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: USE_MOCK_AI
+        value: "false"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_TRANSCRIBE_MODEL
+        value: whisper-1
+      - key: OPENAI_ANALYSIS_MODEL
+        value: gpt-4.1-mini
+      - key: STORAGE_BACKEND
+        value: r2
+      - key: DATA_DIR
+        value: /tmp/sermon-shorts
+      - key: CORS_ORIGINS
+        value: ""
+      - key: FRONTEND_PROXY_URL
+        value: http://127.0.0.1:3000
+      - key: MAX_UPLOAD_SIZE_MB
+        value: "2048"
+      - key: MAX_VIDEO_DURATION_MINUTES
+        value: "90"
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        value: sermon-shorts
+      - key: R2_ENDPOINT_URL
+        sync: false
+      - key: R2_REGION
+        value: auto
+      - key: R2_MULTIPART_PART_SIZE_MB
+        value: "25"
+      - key: R2_UPLOAD_URL_EXPIRY_SECONDS
+        value: "14400"
+      - key: R2_READ_URL_EXPIRY_SECONDS
+        value: "14400"
+      - key: R2_CORS_ORIGINS
+        sync: false
