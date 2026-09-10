@@ -212,3 +212,28 @@ def test_openai_analysis_retries_once_and_fails_safely():
     with pytest.raises(SermonAnalysisError, match="검증하지 못했습니다"):
         service.analyze(stored_segments(6), 60)
     assert service.client.beta.chat.completions.parse.call_count == 2
+
+
+def test_openai_analysis_repairs_overlapping_candidates_once():
+    service = OpenAISermonAnalysisService("test-key", "gpt-4.1-mini")
+    overlapping = SermonAnalysisResult(
+        sermon_summary="요약",
+        sermon_topics=["믿음"],
+        candidates=[make_candidate(0) for _ in range(4)],
+    )
+    repaired = SermonAnalysisResult(
+        sermon_summary="요약",
+        sermon_topics=["믿음"],
+        candidates=[make_candidate(index) for index in range(4)],
+    )
+    service.client.beta.chat.completions.parse = MagicMock(side_effect=[
+        SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(parsed=overlapping))]),
+        SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(parsed=repaired))]),
+    ])
+
+    result = service.analyze(stored_segments(), 240)
+
+    assert result is repaired
+    assert service.client.beta.chat.completions.parse.call_count == 2
+    repair_prompt = service.client.beta.chat.completions.parse.call_args_list[1].kwargs["messages"][1]["content"]
+    assert "이전 후보안은 최종 4개가 서로 겹치거나" in repair_prompt

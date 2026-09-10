@@ -44,31 +44,40 @@ class OpenAISermonAnalysisService(SermonAnalysisService):
             ],
             ensure_ascii=False,
         )
-        prompt = f"""다음 한국어 설교 대본에서 쇼츠 후보 8~12개를 JSON으로 선정하세요.
-각 후보는 30~75초(권장 45~65초), 문장 경계에 맞고 서로 가능한 한 겹치지 않아야 합니다.
-인사/광고/행사 안내는 피하고 핵심 메시지, 삶의 적용, 위로, 강한 질문을 다양하게 포함하세요.
-각 후보에 centrality, standalone, hook, emotional_impact, overall(0~100)과 서로 다른 유형의 한국어 제목 3개를 주세요.
-overall은 centrality 30%, standalone 30%, hook 20%, emotional_impact 20%를 기준으로 계산하세요.
+        base_prompt = f"""다음 한국어 설교 대본에서 쇼츠 후보를 JSON으로 선정하세요.
 후보 범위는 반드시 제공된 segment_id 중 start_segment_id와 end_segment_id로만 선택하세요.
 시간이나 대본을 생성·수정·요약하지 말고 transcript 또는 exact_transcript 필드를 반환하지 마세요.
+
+반드시 총 12개 후보를 반환하세요. 그중 앞의 4개는 최종 후보로 사용할 수 있도록 서로 시간대가 겹치지 않아야 합니다.
+앞의 4개 각각은 30~75초(권장 45~65초)이며 문장 경계에서 시작·종료해야 합니다.
+인사·광고·행사 안내는 피하고 핵심 메시지, 삶의 적용, 위로, 강한 질문을 다양하게 포함하세요.
+각 후보에 centrality, standalone, hook, emotional_impact, overall(0~100)과 서로 다른 유형의 한국어 제목 3개를 주세요.
+overall은 centrality 30%, standalone 30%, hook 20%, emotional_impact 20%를 기준으로 계산하세요.
 영상 길이: {duration_seconds:.2f}초
 
 {timestamped_transcript}"""
+        repair_prompt = base_prompt + """
+
+중요: 이전 후보안은 최종 4개가 서로 겹치거나 길이 조건을 지켜 통과하지 못했습니다.
+이번에는 먼저 전체 시간대를 나누고, 앞의 4개를 서로 절대 겹치지 않는 실제 segment_id 범위로 확정한 뒤 나머지 8개를 추가하세요.
+첫 4개 중 하나라도 30초 미만·75초 초과·존재하지 않는 segment_id·다른 첫 4개와 시간 겹침이면 응답 전체가 사용되지 않습니다."""
         last_error: Optional[Exception] = None
-        for _ in range(2):
+        for attempt in range(2):
             try:
                 completion = self.client.beta.chat.completions.parse(
                     model=self.model,
                     messages=[
                         {"role": "system", "content": "당신은 설교의 의미를 왜곡하지 않는 한국어 영상 편집자입니다."},
-                        {"role": "user", "content": prompt},
+                        {"role": "user", "content": base_prompt if attempt == 0 else repair_prompt},
                     ],
                     response_format=SermonAnalysisResult,
                 )
                 parsed = completion.choices[0].message.parsed
                 if parsed is None:
                     raise ValueError("empty structured response")
-                return parsed
+                if _has_four_valid_non_overlapping_candidates(parsed, segments, duration_seconds):
+                    return parsed
+                last_error = ValueError("insufficient non-overlapping candidate ranges")
             except Exception as exc:
                 last_error = exc
         raise SermonAnalysisError("AI 후보 분석 응답을 검증하지 못했습니다. 잠시 후 다시 시도해 주세요.") from last_error
@@ -187,3 +196,15 @@ def normalize_and_select_candidates(
     if len(selected) < limit:
         raise SermonAnalysisError("서로 겹치지 않는 유효한 쇼츠 후보 4개를 만들지 못했습니다.")
     return sorted(selected, key=lambda item: item.start_sec)
+
+
+def _has_four_valid_non_overlapping_candidates(
+    result: SermonAnalysisResult,
+    segments: Sequence[StoredTranscriptSegmentData],
+    duration_seconds: float,
+) -> bool:
+    try:
+        normalize_and_select_candidates(result, segments, duration_seconds, limit=4)
+    except SermonAnalysisError:
+        return False
+    return True
