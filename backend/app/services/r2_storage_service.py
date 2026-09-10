@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any, Sequence
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from app.core.config import Settings
 from app.services.storage_service import CompletedPart, StorageError, StorageObjectMetadata
+
+
+logger = logging.getLogger(__name__)
 
 
 class R2StorageService:
@@ -42,8 +46,27 @@ class R2StorageService:
             )
         self.client = client
 
-    @staticmethod
-    def _wrap(message: str, exc: Exception) -> StorageError:
+    def _wrap(self, message: str, exc: Exception, *, operation: str) -> StorageError:
+        """Log safe R2 diagnostics without exposing credentials to logs."""
+        error_code = ""
+        error_message = ""
+        response = getattr(exc, "response", None)
+        if isinstance(response, dict):
+            error = response.get("Error")
+            if isinstance(error, dict):
+                error_code = str(error.get("Code") or "")
+                error_message = str(error.get("Message") or "")
+        if operation == "create_multipart_upload":
+            logger.error(
+                "R2 operation failed: operation=%s bucket=%s endpoint_host=%s "
+                "exception=%s error_code=%s error_message=%s",
+                operation,
+                self.bucket,
+                urlparse(self.settings.resolved_r2_endpoint_url).hostname or "",
+                type(exc).__name__,
+                error_code,
+                error_message,
+            )
         return StorageError(message)
 
     def create_multipart_upload(self, object_key: str, content_type: str) -> str:
@@ -55,7 +78,7 @@ class R2StorageService:
             )
             return str(result["UploadId"])
         except Exception as exc:
-            raise self._wrap("R2 업로드를 시작하지 못했습니다.", exc) from exc
+            raise self._wrap("R2 업로드를 시작하지 못했습니다.", exc, operation="create_multipart_upload") from exc
 
     def generate_part_upload_url(
         self, object_key: str, upload_id: str, part_number: int, expires_in: int
@@ -72,7 +95,7 @@ class R2StorageService:
                 ExpiresIn=expires_in,
             ))
         except Exception as exc:
-            raise self._wrap("R2 업로드 권한을 만들지 못했습니다.", exc) from exc
+            raise self._wrap("R2 업로드 권한을 만들지 못했습니다.", exc, operation="generate_part_upload_url") from exc
 
     def complete_multipart_upload(
         self, object_key: str, upload_id: str, parts: Sequence[CompletedPart]
@@ -89,7 +112,7 @@ class R2StorageService:
                 MultipartUpload={"Parts": payload},
             )
         except Exception as exc:
-            raise self._wrap("R2 업로드를 완료하지 못했습니다.", exc) from exc
+            raise self._wrap("R2 업로드를 완료하지 못했습니다.", exc, operation="complete_multipart_upload") from exc
 
     def abort_multipart_upload(self, object_key: str, upload_id: str) -> None:
         try:
@@ -97,7 +120,7 @@ class R2StorageService:
                 Bucket=self.bucket, Key=object_key, UploadId=upload_id
             )
         except Exception as exc:
-            raise self._wrap("R2 업로드를 취소하지 못했습니다.", exc) from exc
+            raise self._wrap("R2 업로드를 취소하지 못했습니다.", exc, operation="abort_multipart_upload") from exc
 
     def get_object_metadata(self, object_key: str) -> StorageObjectMetadata:
         try:
@@ -108,7 +131,7 @@ class R2StorageService:
                 etag=str(result.get("ETag") or "").strip('"') or None,
             )
         except Exception as exc:
-            raise self._wrap("R2에서 영상 파일을 확인하지 못했습니다.", exc) from exc
+            raise self._wrap("R2에서 영상 파일을 확인하지 못했습니다.", exc, operation="head_object") from exc
 
     def generate_download_url(
         self, object_key: str, expires_in: int, download_name: str | None = None
@@ -122,7 +145,7 @@ class R2StorageService:
                 "get_object", Params=params, ExpiresIn=expires_in
             ))
         except Exception as exc:
-            raise self._wrap("R2 영상 접근 주소를 만들지 못했습니다.", exc) from exc
+            raise self._wrap("R2 영상 접근 주소를 만들지 못했습니다.", exc, operation="generate_download_url") from exc
 
     def upload_file(self, source: Path, object_key: str, content_type: str) -> StorageObjectMetadata:
         if not source.is_file() or source.stat().st_size <= 0:
@@ -132,14 +155,14 @@ class R2StorageService:
                 str(source), self.bucket, object_key, ExtraArgs={"ContentType": content_type}
             )
         except Exception as exc:
-            raise self._wrap("완성 영상을 R2에 저장하지 못했습니다.", exc) from exc
+            raise self._wrap("완성 영상을 R2에 저장하지 못했습니다.", exc, operation="upload_file") from exc
         return self.get_object_metadata(object_key)
 
     def delete_object(self, object_key: str) -> None:
         try:
             self.client.delete_object(Bucket=self.bucket, Key=object_key)
         except Exception as exc:
-            raise self._wrap("R2 영상 파일을 삭제하지 못했습니다.", exc) from exc
+            raise self._wrap("R2 영상 파일을 삭제하지 못했습니다.", exc, operation="delete_object") from exc
 
     def delete_project_objects(self, project_id: str) -> int:
         prefix = f"projects/{project_id}/"
@@ -167,5 +190,5 @@ class R2StorageService:
                 if not continuation:
                     break
         except Exception as exc:
-            raise self._wrap("R2 프로젝트 파일을 정리하지 못했습니다.", exc) from exc
+            raise self._wrap("R2 프로젝트 파일을 정리하지 못했습니다.", exc, operation="delete_project_objects") from exc
         return deleted
