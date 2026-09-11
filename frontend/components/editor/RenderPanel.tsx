@@ -48,16 +48,26 @@ export function RenderPanel({ draftId, saveState, hasRequiredData, onBeforeRende
   const activeRender = renders.find((item) => ["queued", "preparing", "rendering"].includes(item.status));
   useEffect(() => {
     if (!activeRender) return;
-    const timer = window.setInterval(() => {
-      void getRender(activeRender.id).then((next) => {
+    let cancelled = false;
+    let timer: number | undefined;
+    const poll = async () => {
+      try {
+        const next = await getRender(activeRender.id);
+        if (cancelled) return;
         setRenders((current) => [next, ...current.filter((item) => item.id !== next.id)].sort((a, b) => b.version - a.version));
         if (next.status === "completed") setSelectedId(next.id);
-      }).catch((caught) => {
-        window.clearInterval(timer);
-        setError(caught instanceof Error ? caught.message : "렌더링 상태를 확인하지 못했습니다.");
-      });
-    }, 1500);
-    return () => window.clearInterval(timer);
+        setError("");
+      } catch {
+        if (!cancelled) setError("렌더 상태를 다시 확인하고 있습니다.");
+      } finally {
+        if (!cancelled) timer = window.setTimeout(poll, 1500);
+      }
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
   }, [activeRender?.id]);
 
   const selected = useMemo(

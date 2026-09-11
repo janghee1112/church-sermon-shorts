@@ -399,6 +399,7 @@ it("starts one render and prevents a duplicate click while it is active", async 
   const queued = { ...completedRender, id: 32, version: 3, status: "queued" as const, progress: 0, output_file_name: null, output_file_size: null, output_duration_sec: null, output_width: null, output_height: null, preview_url: null, download_url: null, completed_at: null };
   vi.mocked(getDraftRenders).mockResolvedValue([]);
   vi.mocked(createRender).mockResolvedValue(queued);
+  apiMocks.getRender.mockResolvedValue(queued);
   const before = vi.fn().mockResolvedValue(true);
   render(<RenderPanel draftId={17} saveState="dirty" hasRequiredData onBeforeRender={before} />);
   await userEvent.click(await screen.findByRole("button", { name: "쇼츠 생성" }));

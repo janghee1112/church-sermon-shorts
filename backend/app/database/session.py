@@ -2,7 +2,7 @@ from typing import Generator
 
 import json
 
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -19,8 +19,28 @@ class Base(DeclarativeBase):
 
 
 settings = get_settings()
-connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
+# Rendering updates progress while the browser polls the same SQLite database.
+# Give a concurrent reader/writer time to finish instead of failing the API request
+# with SQLite's immediate "database is locked" error.
+connect_args = (
+    {"check_same_thread": False, "timeout": 30}
+    if settings.database_url.startswith("sqlite")
+    else {}
+)
 engine = create_engine(settings.database_url, connect_args=connect_args, pool_pre_ping=True)
+
+
+if settings.database_url.startswith("sqlite"):
+    @event.listens_for(engine, "connect")
+    def _configure_sqlite_connection(dbapi_connection, _connection_record) -> None:
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA busy_timeout = 30000")
+            cursor.execute("PRAGMA journal_mode = WAL")
+        finally:
+            cursor.close()
+
+
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
