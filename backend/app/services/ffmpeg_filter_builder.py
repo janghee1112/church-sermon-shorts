@@ -30,6 +30,9 @@ def build_ffmpeg_command(
     fade_out_enabled: bool = True,
     video_fade_duration: float = DEFAULT_VIDEO_FADE_DURATION_SEC,
     audio_fade_duration: float = DEFAULT_AUDIO_FADE_DURATION_SEC,
+    encoder_threads: int = 1,
+    filter_threads: int = 1,
+    x264_lookahead_frames: int = 8,
 ) -> list[str]:
     output_duration_sec = calculate_output_duration(duration_sec, playback_rate)
     video_fade_start, effective_video_fade_duration = calculate_fade_window(
@@ -63,16 +66,23 @@ def build_ffmpeg_command(
             f"afade=t=out:st={audio_fade_start:.6f}:d={effective_audio_fade_duration:.6f}"
         )
     command = [
-        ffmpeg_binary, "-y", "-hide_banner", "-loglevel", "warning",
+        ffmpeg_binary, "-nostdin", "-y", "-hide_banner", "-loglevel", "warning",
+        "-filter_threads", str(filter_threads),
+        "-filter_complex_threads", str(filter_threads),
         "-ss", f"{start_sec:.3f}", "-t", f"{duration_sec:.3f}", "-i", str(source_path),
         "-f", "concat", "-safe", "0", "-i", str(overlay_manifest_path),
     ]
     command.extend([
         "-filter_complex", ";".join(filter_parts),
         "-map", "[outv]", "-map", "0:a:0", "-af", ",".join(audio_filters),
-        "-t", f"{output_duration_sec:.3f}", "-r", str(fps), "-c:v", "libx264", "-threads", "1",
+        "-t", f"{output_duration_sec:.3f}", "-r", str(fps), "-c:v", "libx264",
+        "-threads:v", str(encoder_threads),
+        "-x264-params", (
+            f"threads={encoder_threads}:sync-lookahead=0:"
+            f"rc-lookahead={x264_lookahead_frames}:ref=1"
+        ),
         "-preset", preset, "-crf", str(crf), "-profile:v", "high", "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-ar", "48000", "-b:a", "192k", "-movflags", "+faststart",
+        "-c:a", "aac", "-threads:a", "1", "-ar", "48000", "-b:a", "192k", "-movflags", "+faststart",
         "-progress", "pipe:1", "-nostats", str(temporary_output),
     ])
     return command

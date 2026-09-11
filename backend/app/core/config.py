@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     render_fps: int = 30
     render_crf: int = 20
     render_preset: str = "medium"
+    render_encoder_threads: int = 1
+    render_filter_threads: int = 1
+    render_x264_lookahead_frames: int = 8
     title_font_path: Path = PROJECT_ROOT / "backend" / "assets" / "fonts" / "Pretendard-Black.otf"
     subtitle_font_path: Path = PROJECT_ROOT / "backend" / "assets" / "fonts" / "NanumGothic-Bold.ttf"
     title_font_name: str = "Pretendard Black"
@@ -90,6 +93,20 @@ class Settings(BaseSettings):
     def validate_part_size(cls, value: int) -> int:
         if not 5 <= value <= 512:
             raise ValueError("R2 multipart part size는 5~512MB여야 합니다.")
+        return value
+
+    @field_validator("render_encoder_threads", "render_filter_threads")
+    @classmethod
+    def validate_render_threads(cls, value: int) -> int:
+        if not 1 <= value <= 4:
+            raise ValueError("렌더 스레드 수는 1~4여야 합니다.")
+        return value
+
+    @field_validator("render_x264_lookahead_frames")
+    @classmethod
+    def validate_render_lookahead(cls, value: int) -> int:
+        if not 0 <= value <= 40:
+            raise ValueError("x264 lookahead 프레임 수는 0~40이어야 합니다.")
         return value
 
     @field_validator("title_font_path", "subtitle_font_path", mode="before")

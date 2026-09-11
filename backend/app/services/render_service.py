@@ -5,6 +5,7 @@ import logging
 import os
 import shutil
 import subprocess
+import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,6 +40,7 @@ from app.services.storage_service import StorageError, get_storage_service, proj
 
 logger = logging.getLogger(__name__)
 ACTIVE_RENDER_STATUSES = ("queued", "preparing", "rendering")
+_RENDER_EXECUTION_LOCK = threading.Lock()
 
 
 class RenderError(Exception):
@@ -187,6 +189,9 @@ def _build_snapshot(draft: ClipDraft, settings: Settings) -> dict[str, Any]:
             "fps": settings.render_fps,
             "crf": settings.render_crf,
             "preset": settings.render_preset,
+            "encoder_threads": settings.render_encoder_threads,
+            "filter_threads": settings.render_filter_threads,
+            "x264_lookahead_frames": settings.render_x264_lookahead_frames,
             "video_codec": "libx264",
             "audio_codec": "aac",
             "pixel_format": "yuv420p",
@@ -448,6 +453,9 @@ def process_render_job(db: Session, render_id: int) -> None:
             fade_out_enabled=fade_out_enabled,
             video_fade_duration=video_fade_duration,
             audio_fade_duration=audio_fade_duration,
+            encoder_threads=int(output.get("encoder_threads", 1)),
+            filter_threads=int(output.get("filter_threads", 1)),
+            x264_lookahead_frames=int(output.get("x264_lookahead_frames", 8)),
         )
         step = "encoding"
         _set_state(db, job, "rendering", 30, step)
@@ -536,11 +544,15 @@ def process_render_job(db: Session, render_id: int) -> None:
 
 
 def run_render_job(render_id: int) -> None:
-    db = SessionLocal()
-    try:
-        process_render_job(db, render_id)
-    finally:
-        db.close()
+    # A single free web instance cannot safely hold multiple 1080x1920 x264
+    # encoders at once. Keep additional jobs queued until the active encoder
+    # releases its memory.
+    with _RENDER_EXECUTION_LOCK:
+        db = SessionLocal()
+        try:
+            process_render_job(db, render_id)
+        finally:
+            db.close()
 
 
 def recover_stalled_render_jobs(db: Session) -> int:

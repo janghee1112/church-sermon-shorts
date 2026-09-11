@@ -31,6 +31,18 @@ services:
         value: "2048"
       - key: MAX_VIDEO_DURATION_MINUTES
         value: "90"
+      - key: RENDER_PRESET
+        value: veryfast
+      - key: RENDER_ENCODER_THREADS
+        value: "1"
+      - key: RENDER_FILTER_THREADS
+        value: "1"
+      - key: RENDER_X264_LOOKAHEAD_FRAMES
+        value: "8"
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=128
+      - key: MALLOC_ARENA_MAX
+        value: "2"
       - key: R2_ACCOUNT_ID
         sync: false
       - key: R2_ACCESS_KEY_ID

@@ -283,7 +283,10 @@ def test_ffmpeg_command_uses_one_composited_overlay_timeline(tmp_path):
     assert "[1:v]format=rgba" in graph
     assert command.count("-i") == 2
     assert command[command.index("-f") + 1] == "concat"
-    assert command[command.index("-threads") + 1] == "1"
+    assert command[command.index("-threads:v") + 1] == "1"
+    assert command[command.index("-threads:a") + 1] == "1"
+    assert command[command.index("-filter_complex_threads") + 1] == "1"
+    assert "sync-lookahead=0:rc-lookahead=8:ref=1" in command[command.index("-x264-params") + 1]
 
 
 @pytest.mark.parametrize(
