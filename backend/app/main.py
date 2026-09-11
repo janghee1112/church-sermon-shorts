@@ -55,6 +55,17 @@ app.include_router(subtitle_layout_router)
 app.include_router(uploads_router)
 
 
+@app.get("/live", include_in_schema=False)
+def live() -> dict[str, str]:
+    """Lightweight process liveness check for the hosting platform.
+
+    Dependency checks belong to /health. The platform must not restart an
+    otherwise healthy render worker just because FFmpeg temporarily delays the
+    internal frontend or a disk probe on a small instance.
+    """
+    return {"status": "ok"}
+
+
 @app.get("/health")
 def health(response: Response) -> dict[str, str]:
     database_ok = storage_ok = tools_ok = frontend_ok = False

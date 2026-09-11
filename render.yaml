@@ -7,7 +7,7 @@ services:
     branch: main
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    healthCheckPath: /health
+    healthCheckPath: /live
     envVars:
       - key: APP_ENV
         value: production

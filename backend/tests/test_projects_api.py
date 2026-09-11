@@ -28,6 +28,12 @@ def test_health_checks_database_storage_ffmpeg_and_frontend(client):
     }
 
 
+def test_liveness_check_is_lightweight_and_always_reports_the_process(client):
+    response = client.get("/live")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
 def test_normal_mp4_upload_and_project_lookup(client, sample_video):
     response = upload(client, sample_video)
     assert response.status_code == 201
