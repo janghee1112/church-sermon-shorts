@@ -13,7 +13,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_transcribe_model: str = "whisper-1"
-    openai_analysis_model: str = "gpt-4.1-mini"
+    openai_analysis_model: str = "gpt-6.1-terra"
     use_mock_ai: bool = True
     app_env: str = "development"
     max_upload_size_mb: int = 2048

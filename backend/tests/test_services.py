@@ -206,16 +206,18 @@ def test_openai_transcription_failure_is_wrapped(tmp_path):
         service.transcribe([AudioChunk(audio, 0)], 60)
 
 
-def test_openai_analysis_retries_once_and_fails_safely():
-    service = OpenAISermonAnalysisService("test-key", "gpt-4.1-mini")
+@pytest.mark.parametrize("model", ["gpt-4.1-mini", "gpt-6.1-terra"])
+def test_openai_analysis_retries_once_and_fails_safely(model):
+    service = OpenAISermonAnalysisService("test-key", model)
     service.client.beta.chat.completions.parse = MagicMock(side_effect=RuntimeError("bad response"))
     with pytest.raises(SermonAnalysisError, match="검증하지 못했습니다"):
         service.analyze(stored_segments(6), 60)
     assert service.client.beta.chat.completions.parse.call_count == 2
 
 
-def test_openai_analysis_repairs_overlapping_candidates_once():
-    service = OpenAISermonAnalysisService("test-key", "gpt-4.1-mini")
+@pytest.mark.parametrize("model", ["gpt-4.1-mini", "gpt-6.1-terra"])
+def test_openai_analysis_repairs_overlapping_candidates_once(model):
+    service = OpenAISermonAnalysisService("test-key", model)
     overlapping = SermonAnalysisResult(
         sermon_summary="요약",
         sermon_topics=["믿음"],

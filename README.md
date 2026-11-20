@@ -93,7 +93,7 @@ cp frontend/.env.example frontend/.env.local
 | `APP_ENV` | `development`에서 전사 검수용 디버그 정보 표시 | `development` |
 | `OPENAI_API_KEY` | 실제 AI 모드의 서버 전용 키 | 빈 값 |
 | `OPENAI_TRANSCRIBE_MODEL` | 전사 모델명 | `whisper-1` |
-| `OPENAI_ANALYSIS_MODEL` | JSON 분석 모델명 | `gpt-4.1-mini` |
+| `OPENAI_ANALYSIS_MODEL` | JSON 분석 모델명 | `gpt-6.1-terra` |
 | `MAX_UPLOAD_SIZE_MB` | 업로드 최대 크기 | `2048` |
 | `MAX_VIDEO_DURATION_MINUTES` | 최대 영상 길이 | `90` |
 | `DATABASE_URL` | SQLAlchemy DB URL | `sqlite:///./sermon_shorts.db` |
@@ -164,7 +164,7 @@ Mock 모드도 업로드 영상 자체는 FFmpeg로 검증하고 실제 음성�
 USE_MOCK_AI=false
 OPENAI_API_KEY=your_server_side_key
 OPENAI_TRANSCRIBE_MODEL=whisper-1
-OPENAI_ANALYSIS_MODEL=gpt-4.1-mini
+OPENAI_ANALYSIS_MODEL=gpt-6.1-terra
 ```
 
 `whisper-1`의 verbose JSON 타임스탬프를 기본으로 사용합니다. 긴 오디오는 기본 20분 조각과 2초 오버랩으로 나누고, 조각 기준 시간을 원본 영상 기준으로 환산한 뒤 시간/문자열 유사도로 중복을 제거합니다. 분석 응답은 Pydantic JSON 스키마로 검증하며 잘못된 응답은 한 번 재시도합니다.

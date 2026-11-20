@@ -18,7 +18,7 @@ services:
       - key: OPENAI_TRANSCRIBE_MODEL
         value: whisper-1
       - key: OPENAI_ANALYSIS_MODEL
-        value: gpt-4.1-mini
+        value: gpt-6.1-terra
       - key: STORAGE_BACKEND
         value: r2
       - key: DATA_DIR
